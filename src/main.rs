@@ -2,6 +2,7 @@ mod cli;
 mod commands;
 mod config;
 mod hashes;
+mod helpers;
 mod zerostack;
 
 use clap::Parser;

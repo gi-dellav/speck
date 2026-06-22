@@ -1,5 +1,6 @@
 use crate::config::SpeckConfig;
 use crate::hashes::{self, SpeckHashes};
+use crate::helpers;
 use crate::zerostack;
 use dialoguer::Confirm;
 use std::collections::BTreeMap;
@@ -33,7 +34,7 @@ pub fn run(
     let src_path = PathBuf::from(&config.source_dir);
 
     // Snapshot edited files before any changes
-    let gitignore_patterns = load_gitignore()?;
+    let gitignore_patterns = helpers::load_gitignore()?;
     let edited_src = edited_files(&src_path, &stored_hashes.src_hash, &gitignore_patterns)?;
     let edited_tech = edited_files(&technical_path, &stored_hashes.technical_hash, &gitignore_patterns)?;
     let edited_feat = edited_files(&features_path, &stored_hashes.features_hash, &gitignore_patterns)?;
@@ -120,8 +121,6 @@ pub fn run(
             &[
                 "--load-prompt",
                 &zerostack::prompt_path("speck-tech2feat.md"),
-                "--temperature",
-                "0.7",
                 "--no-session",
             ],
             &msg,
@@ -188,13 +187,13 @@ pub fn run(
     eprintln!("Updating hashes...");
     let mut new_hashes = SpeckHashes::default();
     if features_path.exists() {
-        collect_hashes(&features_path, &mut new_hashes.features_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&features_path, &mut new_hashes.features_hash, &gitignore_patterns)?;
     }
     if technical_path.exists() {
-        collect_hashes(&technical_path, &mut new_hashes.technical_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&technical_path, &mut new_hashes.technical_hash, &gitignore_patterns)?;
     }
     if src_path.exists() {
-        collect_hashes(&src_path, &mut new_hashes.src_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&src_path, &mut new_hashes.src_hash, &gitignore_patterns)?;
     }
     new_hashes.to_file(&hash_path)?;
 
@@ -227,7 +226,7 @@ fn edited_files(
     {
         let rel = entry.path().strip_prefix(&project_dir)?;
         let rel_str = rel.to_string_lossy().to_string();
-        if is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
+        if helpers::is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
             continue;
         }
         if let Some(stored_hash) = stored.get(&rel_str) {
@@ -257,7 +256,7 @@ fn unregistered_files(
     {
         let rel = entry.path().strip_prefix(&project_dir)?;
         let rel_str = rel.to_string_lossy().to_string();
-        if is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
+        if helpers::is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
             continue;
         }
         if !stored.contains_key(&rel_str) {
@@ -284,10 +283,6 @@ fn src_to_tech_counterpart(src_file: &str, source_dir: &str) -> Option<String> {
     if src_file.starts_with(&prefix) {
         let remainder = src_file.strip_prefix(&prefix)?;
         let tech_file = format!("specs/technical/{}", remainder);
-        // The technical spec mirrors the source structure with .md extension
-        // But the filename itself might already end with .rs, .py, etc.
-        // The DESIGN says 1:1 basis, same file names and structure.
-        // So we look for the exact same filename in specs/technical/
         Some(tech_file)
     } else {
         None
@@ -309,7 +304,6 @@ fn resolve_conflicts(
         return Ok(Vec::new());
     }
 
-    // Interactive resolution
     let mut keep_src = Vec::new();
     for (src, tech) in conflicts {
         let prompt = format!(
@@ -325,65 +319,6 @@ fn resolve_conflicts(
         }
     }
     Ok(keep_src)
-}
-
-fn load_gitignore() -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let gitignore_path = std::env::current_dir()?.join(".gitignore");
-    if !gitignore_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = std::fs::read_to_string(gitignore_path)?;
-    Ok(content
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .collect())
-}
-
-fn is_ignored_file(rel_str: &str, path: &std::path::Path, gitignore_patterns: &[String]) -> bool {
-    if rel_str.starts_with("specs/")
-        && path.file_name().and_then(|n| n.to_str()).is_some_and(|f| f.starts_with('_') && f.ends_with(".md"))
-    {
-        return true;
-    }
-    if rel_str == "Speck.toml" || rel_str == ".speck_hash.toml" {
-        return true;
-    }
-    for pattern in gitignore_patterns {
-        if pattern.contains('*') {
-            let regex_pattern = pattern.replace('.', "\\.").replace('*', ".*").replace('?', ".");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern))
-                && re.is_match(rel_str)
-            {
-                return true;
-            }
-        } else if rel_str.starts_with(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-fn collect_hashes(
-    dir: &PathBuf,
-    map: &mut BTreeMap<String, String>,
-    gitignore_patterns: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
-    let project_dir = std::env::current_dir()?;
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file())
-    {
-        let rel = entry.path().strip_prefix(&project_dir)?;
-        let rel_str = rel.to_string_lossy().to_string();
-        if is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
-            continue;
-        }
-        let hash = hashes::compute_hash(&entry.path().to_path_buf())?;
-        map.insert(rel_str, hash);
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -475,19 +410,5 @@ mod tests {
         ];
         let result = resolve_conflicts(&conflicts, true, true);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_is_ignored_file_speck_toml() {
-        let patterns: Vec<String> = vec![];
-        assert!(is_ignored_file("Speck.toml", std::path::Path::new("Speck.toml"), &patterns));
-        assert!(is_ignored_file(".speck_hash.toml", std::path::Path::new(".speck_hash.toml"), &patterns));
-    }
-
-    #[test]
-    fn test_is_ignored_file_underscore_md() {
-        let patterns: Vec<String> = vec![];
-        assert!(is_ignored_file("specs/_draft.md", std::path::Path::new("specs/_draft.md"), &patterns));
-        assert!(!is_ignored_file("specs/features/auth.md", std::path::Path::new("specs/features/auth.md"), &patterns));
     }
 }

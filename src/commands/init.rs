@@ -1,5 +1,6 @@
 use crate::config::SpeckConfig;
 use crate::hashes::SpeckHashes;
+use crate::helpers;
 use dialoguer::{Confirm, Input};
 
 pub fn run(name: Option<String>, source_path: Option<String>, skip_git: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -100,34 +101,9 @@ pub fn run(name: Option<String>, source_path: Option<String>, skip_git: bool) ->
     }
 
     // Ensure Speck.toml and .speck_hash.toml are not in .gitignore
-    ensure_not_gitignored(&project_dir)?;
+    helpers::ensure_not_gitignored(&project_dir)?;
 
     println!("Speck project '{}' initialized successfully.", config.name);
-    Ok(())
-}
-
-fn ensure_not_gitignored(project_dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-    let gitignore_path = project_dir.join(".gitignore");
-    if !gitignore_path.exists() {
-        return Ok(());
-    }
-    let content = std::fs::read_to_string(&gitignore_path)?;
-    let mut modified = false;
-    let mut new_lines: Vec<&str> = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == "Speck.toml" || trimmed == ".speck_hash.toml" {
-            modified = true;
-            continue;
-        }
-        new_lines.push(line);
-    }
-
-    if modified {
-        std::fs::write(&gitignore_path, new_lines.join("\n") + "\n")?;
-        eprintln!("Removed Speck.toml and .speck_hash.toml from .gitignore");
-    }
     Ok(())
 }
 
@@ -165,7 +141,7 @@ mod tests {
         let dir = setup_temp_dir();
         let gitignore = dir.join(".gitignore");
         fs::write(&gitignore, "node_modules\nSpeck.toml\n.speck_hash.toml\n").unwrap();
-        ensure_not_gitignored(&dir).unwrap();
+        helpers::ensure_not_gitignored(&dir).unwrap();
         let content = fs::read_to_string(&gitignore).unwrap();
         assert!(!content.contains("Speck.toml"));
         assert!(!content.contains(".speck_hash.toml"));
@@ -176,7 +152,7 @@ mod tests {
     #[test]
     fn test_ensure_not_gitignored_noop_when_missing() {
         let dir = setup_temp_dir();
-        let result = ensure_not_gitignored(&dir);
+        let result = helpers::ensure_not_gitignored(&dir);
         assert!(result.is_ok());
         cleanup_temp_dir(&dir);
     }

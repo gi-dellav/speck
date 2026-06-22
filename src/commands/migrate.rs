@@ -1,5 +1,6 @@
 use crate::config::SpeckConfig;
 use crate::hashes::SpeckHashes;
+use crate::helpers;
 use crate::zerostack;
 use dialoguer::{Confirm, Input};
 use std::path::PathBuf;
@@ -50,8 +51,6 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         &[
             "--load-prompt",
             &zerostack::prompt_path("speck-tech2feat.md"),
-            "--temperature",
-            "0.7",
             "--no-session",
         ],
         &msg2,
@@ -81,20 +80,20 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize hashes from current file state
     let mut hashes = SpeckHashes::default();
-    let gitignore_patterns = load_gitignore()?;
+    let gitignore_patterns = helpers::load_gitignore()?;
 
     let features_path = PathBuf::from(config.features_path());
     let technical_path = PathBuf::from(SpeckConfig::technical_path());
     let src_path = PathBuf::from(&config.source_dir);
 
     if features_path.exists() {
-        collect_hashes(&features_path, &mut hashes.features_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&features_path, &mut hashes.features_hash, &gitignore_patterns)?;
     }
     if technical_path.exists() {
-        collect_hashes(&technical_path, &mut hashes.technical_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&technical_path, &mut hashes.technical_hash, &gitignore_patterns)?;
     }
     if src_path.exists() {
-        collect_hashes(&src_path, &mut hashes.src_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&src_path, &mut hashes.src_hash, &gitignore_patterns)?;
     }
     hashes.to_file(&project_dir.join(".speck_hash.toml"))?;
 
@@ -137,7 +136,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         println!("You can review specs/features/ and run `speck apply` when ready.");
     }
 
-    ensure_not_gitignored(&project_dir)?;
+    helpers::ensure_not_gitignored(&project_dir)?;
     println!("\nMigration complete. Run `speck apply` to ensure specs and code are in sync.");
     Ok(())
 }
@@ -157,87 +156,6 @@ fn build_migrate_msg(base: &str, custom: &Option<String>) -> String {
         msg.push_str(&format!("\n\nAdditional instructions: {}", c));
     }
     msg
-}
-
-fn load_gitignore() -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let gitignore_path = std::env::current_dir()?.join(".gitignore");
-    if !gitignore_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = std::fs::read_to_string(gitignore_path)?;
-    Ok(content
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .collect())
-}
-
-fn collect_hashes(
-    dir: &PathBuf,
-    map: &mut std::collections::BTreeMap<String, String>,
-    gitignore_patterns: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
-    let project_dir = std::env::current_dir()?;
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file())
-    {
-        let rel = entry.path().strip_prefix(&project_dir)?;
-        let rel_str = rel.to_string_lossy().to_string();
-        if is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
-            continue;
-        }
-        let hash = crate::hashes::compute_hash(&entry.path().to_path_buf())?;
-        map.insert(rel_str, hash);
-    }
-    Ok(())
-}
-
-fn is_ignored_file(rel_str: &str, path: &std::path::Path, gitignore_patterns: &[String]) -> bool {
-    if rel_str.starts_with("specs/")
-        && path.file_name().and_then(|n| n.to_str()).is_some_and(|f| f.starts_with('_') && f.ends_with(".md"))
-    {
-        return true;
-    }
-    if rel_str == "Speck.toml" || rel_str == ".speck_hash.toml" {
-        return true;
-    }
-    for pattern in gitignore_patterns {
-        if pattern.contains('*') {
-            let regex_pattern = pattern.replace('.', "\\.").replace('*', ".*").replace('?', ".");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern))
-                && re.is_match(rel_str)
-            {
-                return true;
-            }
-        } else if rel_str.starts_with(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-fn ensure_not_gitignored(project_dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-    let gitignore_path = project_dir.join(".gitignore");
-    if !gitignore_path.exists() {
-        return Ok(());
-    }
-    let content = std::fs::read_to_string(&gitignore_path)?;
-    let mut modified = false;
-    let mut new_lines: Vec<&str> = Vec::new();
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == "Speck.toml" || trimmed == ".speck_hash.toml" {
-            modified = true;
-            continue;
-        }
-        new_lines.push(line);
-    }
-    if modified {
-        std::fs::write(&gitignore_path, new_lines.join("\n") + "\n")?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

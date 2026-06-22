@@ -58,7 +58,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         if !existing.contains("#!/bin/sh") && !existing.contains("#!/usr/bin/env") {
             new_content = format!("#!/bin/sh\n\n{}", new_content.trim_start_matches("#!/bin/sh\n"));
-            // ponytail: better shebang management if edge cases arise
             if !existing.is_empty() && !existing.starts_with("#!") {
                 new_content = format!("#!/bin/sh\n{}", new_content.trim_start_matches("#!/bin/sh\n"));
             }
@@ -78,4 +77,40 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hooks_constants() {
+        assert_eq!(HOOKS.len(), 5);
+        assert_eq!(HOOKS[0].0, "check-before-commit");
+        assert_eq!(HOOKS[0].1, "pre-commit");
+        assert_eq!(HOOKS[1].0, "format-before-commit");
+        assert_eq!(HOOKS[1].1, "pre-commit");
+        assert_eq!(HOOKS[2].1, "pre-push");
+        assert_eq!(HOOKS[3].1, "post-merge");
+        assert_eq!(HOOKS[4].1, "post-checkout");
+    }
+
+    #[test]
+    fn test_run_fails_outside_git_repo() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("speck_hooks_test_{}_{}", std::process::id(), id));
+        std::fs::create_dir_all(&dir).unwrap();
+        use std::sync::Mutex;
+        static CWD_MUTEX: Mutex<()> = Mutex::new(());
+        let _lock = CWD_MUTEX.lock().unwrap();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dir).unwrap();
+        let result = run();
+        std::env::set_current_dir(&original_dir).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not a git repository"));
+    }
 }

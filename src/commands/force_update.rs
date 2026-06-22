@@ -1,5 +1,6 @@
 use crate::config::SpeckConfig;
-use crate::hashes::{self, SpeckHashes};
+use crate::hashes::SpeckHashes;
+use crate::helpers;
 use std::path::Path;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,20 +22,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let features_path = Path::new(config.features_path());
     let technical_path = Path::new(SpeckConfig::technical_path());
     let src_path = Path::new(&config.source_dir);
+    let gitignore_patterns = helpers::load_gitignore()?;
 
     hashes.features_hash.clear();
     if features_path.exists() {
-        collect_hashes(features_path, &mut hashes.features_hash)?;
+        helpers::collect_hashes(features_path, &mut hashes.features_hash, &gitignore_patterns)?;
     }
 
     hashes.technical_hash.clear();
     if technical_path.exists() {
-        collect_hashes(technical_path, &mut hashes.technical_hash)?;
+        helpers::collect_hashes(technical_path, &mut hashes.technical_hash, &gitignore_patterns)?;
     }
 
     hashes.src_hash.clear();
     if src_path.exists() {
-        collect_hashes(src_path, &mut hashes.src_hash)?;
+        helpers::collect_hashes(src_path, &mut hashes.src_hash, &gitignore_patterns)?;
     }
 
     hashes.to_file(&hash_path)?;
@@ -42,68 +44,87 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn collect_hashes(dir: &Path, map: &mut std::collections::BTreeMap<String, String>) -> Result<(), Box<dyn std::error::Error>> {
-    let current_dir = std::env::current_dir()?;
-    let gitignore_patterns = load_gitignore()?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file())
-    {
-        let rel = entry.path().strip_prefix(&current_dir)?;
-        let rel_str = rel.to_string_lossy().to_string();
-
-        if is_ignored_file(&rel_str, entry.path(), &gitignore_patterns) {
-            continue;
-        }
-
-        let hash = hashes::compute_hash(&entry.path().to_path_buf())?;
-        map.insert(rel_str, hash);
-    }
-    Ok(())
-}
-
-fn load_gitignore() -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let gitignore_path = std::env::current_dir()?.join(".gitignore");
-    if !gitignore_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = std::fs::read_to_string(gitignore_path)?;
-    Ok(content
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .collect())
-}
-
-fn is_ignored_file(rel_str: &str, path: &Path, gitignore_patterns: &[String]) -> bool {
-    if rel_str.starts_with("specs/")
-        && let Some(filename) = path.file_name().and_then(|n| n.to_str())
-        && filename.starts_with('_')
-        && filename.ends_with(".md")
-    {
-        return true;
+    fn setup_temp_project() -> std::path::PathBuf {
+        let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("speck_fu_test_{}_{}", std::process::id(), id));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("main.rs"), "fn main() {}").unwrap();
+        let features = dir.join("specs/features");
+        std::fs::create_dir_all(&features).unwrap();
+        std::fs::write(features.join("hello.md"), "# Hello").unwrap();
+        let tech = dir.join("specs/technical");
+        std::fs::create_dir_all(&tech).unwrap();
+        std::fs::write(tech.join("main.rs.md"), "# main").unwrap();
+        let config_path = dir.join("Speck.toml");
+        let mut f = std::fs::File::create(&config_path).unwrap();
+        writeln!(f, "name = \"test\"").unwrap();
+        writeln!(f, "source_dir = \"src\"").unwrap();
+        dir
     }
 
-    if rel_str == "Speck.toml" || rel_str == ".speck_hash.toml" {
-        return true;
+    fn run_in_dir(dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        use std::sync::Mutex;
+        static CWD_MUTEX: Mutex<()> = Mutex::new(());
+        let _lock = CWD_MUTEX.lock().unwrap();
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir).unwrap();
+        let result = run();
+        std::env::set_current_dir(&original).unwrap();
+        result
     }
 
-    for pattern in gitignore_patterns {
-        if pattern.contains('*') {
-            let regex_pattern = pattern
-                .replace('.', "\\.")
-                .replace('*', ".*")
-                .replace('?', ".");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern))
-                && re.is_match(rel_str)
-            {
-                return true;
-            }
-        } else if rel_str.starts_with(pattern) {
-            return true;
-        }
+    #[test]
+    fn test_force_update_creates_hash_file() {
+        let dir = setup_temp_project();
+        let hash_path = dir.join(".speck_hash.toml");
+        assert!(!hash_path.exists());
+        run_in_dir(&dir).unwrap();
+        assert!(hash_path.exists());
+        let content = std::fs::read_to_string(&hash_path).unwrap();
+        assert!(content.contains("src/main.rs"));
+        assert!(content.contains("specs/features/hello.md"));
+        assert!(content.contains("specs/technical/main.rs.md"));
+        std::fs::remove_dir_all(&dir).ok();
     }
-    false
+
+    #[test]
+    fn test_force_update_overwrites_existing_hashes() {
+        let dir = setup_temp_project();
+        let hash_path = dir.join(".speck_hash.toml");
+        std::fs::write(&hash_path, "[src_hash]\n\"src/main.rs\" = \"oldhash\"\n").unwrap();
+        run_in_dir(&dir).unwrap();
+        let content = std::fs::read_to_string(&hash_path).unwrap();
+        assert!(!content.contains("oldhash"));
+        assert!(content.contains("src/main.rs"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_force_update_fails_without_speck_toml() {
+        let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!("speck_fu_no_config_{}_{}", std::process::id(), id));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = run_in_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_force_update_ignores_underscore_files() {
+        let dir = setup_temp_project();
+        std::fs::write(dir.join("specs/_draft.md"), "# draft").unwrap();
+        run_in_dir(&dir).unwrap();
+        let content = std::fs::read_to_string(dir.join(".speck_hash.toml")).unwrap();
+        assert!(!content.contains("_draft.md"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

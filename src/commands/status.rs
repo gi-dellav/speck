@@ -1,5 +1,6 @@
 use crate::config::SpeckConfig;
 use crate::hashes::{self, SpeckHashes};
+use crate::helpers;
 use std::path::PathBuf;
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,12 +29,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut unregistered_technical: Vec<String> = Vec::new();
     let mut unregistered_src: Vec<String> = Vec::new();
 
+    let gitignore_patterns = helpers::load_gitignore()?;
+
     // Check features
     check_directory(
         &features_path,
         &stored_hashes.features_hash,
         &mut edited_features,
         &mut unregistered_features,
+        &gitignore_patterns,
     )?;
 
     // Check technical
@@ -42,6 +46,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         &stored_hashes.technical_hash,
         &mut edited_technical,
         &mut unregistered_technical,
+        &gitignore_patterns,
     )?;
 
     // Check source
@@ -50,6 +55,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         &stored_hashes.src_hash,
         &mut edited_src,
         &mut unregistered_src,
+        &gitignore_patterns,
     )?;
 
     if edited_features.is_empty()
@@ -75,11 +81,11 @@ fn check_directory(
     stored: &std::collections::BTreeMap<String, String>,
     edited: &mut Vec<String>,
     unregistered: &mut Vec<String>,
+    gitignore_patterns: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !dir.exists() {
         return Ok(());
     }
-    let gitignore_patterns = load_gitignore()?;
 
     for entry in walkdir::WalkDir::new(dir)
         .into_iter()
@@ -89,22 +95,7 @@ fn check_directory(
         let rel = entry.path().strip_prefix(std::env::current_dir()?)?;
         let rel_str = rel.to_string_lossy().to_string();
 
-        // Ignore specs/_*.md files
-        if rel_str.starts_with("specs/")
-            && let Some(filename) = rel.file_name().and_then(|n| n.to_str())
-            && filename.starts_with('_')
-            && filename.ends_with(".md")
-        {
-            continue;
-        }
-
-        // Ignore gitignored files
-        if is_gitignored(&rel_str, &gitignore_patterns) {
-            continue;
-        }
-
-        // Ignore speck's own metadata files
-        if rel_str == "Speck.toml" || rel_str == ".speck_hash.toml" {
+        if helpers::is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
             continue;
         }
 
@@ -120,39 +111,6 @@ fn check_directory(
     Ok(())
 }
 
-fn load_gitignore() -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let gitignore_path = std::env::current_dir()?.join(".gitignore");
-    if !gitignore_path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = std::fs::read_to_string(gitignore_path)?;
-    Ok(content
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .collect())
-}
-
-fn is_gitignored(rel_path: &str, patterns: &[String]) -> bool {
-    for pattern in patterns {
-        if pattern.contains('*') {
-            // Simple glob matching
-            let regex_pattern = pattern
-                .replace('.', "\\.")
-                .replace('*', ".*")
-                .replace('?', ".");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern))
-                && re.is_match(rel_path)
-            {
-                return true;
-            }
-        } else if rel_path.starts_with(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
 fn print_section(title: &str, edited: &[String], unregistered: &[String]) {
     if edited.is_empty() && unregistered.is_empty() {
         return;
@@ -163,25 +121,5 @@ fn print_section(title: &str, edited: &[String], unregistered: &[String]) {
     }
     for f in unregistered {
         println!("  + {}", f);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_gitignored_exact_match() {
-        let patterns = vec!["target".to_string(), "node_modules".to_string()];
-        assert!(is_gitignored("target/debug/build", &patterns));
-        assert!(is_gitignored("node_modules/pkg", &patterns));
-        assert!(!is_gitignored("src/main.rs", &patterns));
-    }
-
-    #[test]
-    fn test_is_gitignored_glob() {
-        let patterns = vec!["*.log".to_string()];
-        assert!(is_gitignored("debug.log", &patterns));
-        assert!(!is_gitignored("log.txt", &patterns));
     }
 }
