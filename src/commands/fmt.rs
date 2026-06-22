@@ -72,3 +72,47 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("Formatted and updated source hashes.");
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    fn run_fmt_in_dir(dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        crate::test_utils::with_cwd_locked(dir, super::run)
+    }
+
+    #[test]
+    fn test_fmt_fails_without_speck_toml() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_fmt_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = run_fmt_in_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Speck.toml"));
+    }
+
+    #[test]
+    fn test_fmt_fails_without_hash_file() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_fmt_test2_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        let result = run_fmt_in_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains(".speck_hash.toml"));
+    }
+
+    #[test]
+    fn test_fmt_fails_without_fmt_cmd() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_fmt_test3_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        let hashes = crate::hashes::SpeckHashes::default();
+        hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
+        let result = run_fmt_in_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("fmt_cmd"));
+    }
+}

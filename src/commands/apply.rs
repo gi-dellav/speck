@@ -102,6 +102,7 @@ pub fn run(
                 "--no-session",
             ],
             &msg,
+            config.model.as_deref(),
         )?;
     }
 
@@ -121,9 +122,12 @@ pub fn run(
             &[
                 "--load-prompt",
                 &zerostack::prompt_path("speck-tech2feat.md"),
+                "--temperature",
+                "0",
                 "--no-session",
             ],
             &msg,
+            config.model.as_deref(),
         )?;
     }
 
@@ -148,6 +152,7 @@ pub fn run(
                 "--no-session",
             ],
             &msg,
+            config.model.as_deref(),
         )?;
     }
 
@@ -180,7 +185,7 @@ pub fn run(
             args.push("--temperature");
             args.push(&temp_str);
         }
-        zerostack::run_p(&args, &msg)?;
+        zerostack::run_p(&args, &msg, config.model.as_deref())?;
     }
 
     // Step 5: Update hashes

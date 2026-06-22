@@ -3,6 +3,8 @@ mod commands;
 mod config;
 mod hashes;
 mod helpers;
+#[cfg(test)]
+mod test_utils;
 mod zerostack;
 
 use clap::Parser;

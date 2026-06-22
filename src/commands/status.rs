@@ -33,6 +33,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check features
     check_directory(
+        &project_dir,
         &features_path,
         &stored_hashes.features_hash,
         &mut edited_features,
@@ -42,6 +43,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check technical
     check_directory(
+        &project_dir,
         &technical_path,
         &stored_hashes.technical_hash,
         &mut edited_technical,
@@ -51,6 +53,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check source
     check_directory(
+        &project_dir,
         &src_path,
         &stored_hashes.src_hash,
         &mut edited_src,
@@ -77,6 +80,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn check_directory(
+    project_dir: &PathBuf,
     dir: &PathBuf,
     stored: &std::collections::BTreeMap<String, String>,
     edited: &mut Vec<String>,
@@ -92,7 +96,7 @@ fn check_directory(
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file())
     {
-        let rel = entry.path().strip_prefix(std::env::current_dir()?)?;
+        let rel = entry.path().strip_prefix(project_dir)?;
         let rel_str = rel.to_string_lossy().to_string();
 
         if helpers::is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
@@ -121,5 +125,97 @@ fn print_section(title: &str, edited: &[String], unregistered: &[String]) {
     }
     for f in unregistered {
         println!("  + {}", f);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hashes::{self};
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_check_directory_empty_dir() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_status_empty_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let stored: BTreeMap<String, String> = BTreeMap::new();
+        let mut edited = Vec::new();
+        let mut unreg = Vec::new();
+        check_directory(&dir, &dir, &stored, &mut edited, &mut unreg, &[]).unwrap();
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_check_directory_missing_dir() {
+        let project_dir = std::env::temp_dir()
+            .join(format!("speck_status_missing_proj_{}", std::process::id()));
+        std::fs::create_dir_all(&project_dir).unwrap();
+        let dir = std::path::PathBuf::from("/nonexistent_dir");
+        let stored: BTreeMap<String, String> = BTreeMap::new();
+        let mut edited = Vec::new();
+        let mut unreg = Vec::new();
+        check_directory(&project_dir, &dir, &stored, &mut edited, &mut unreg, &[]).unwrap();
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&project_dir).ok();
+    }
+
+    #[test]
+    fn test_check_directory_detects_edited() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_status_edit_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("test.md");
+        std::fs::write(&file, "initial content").unwrap();
+
+        let mut stored: BTreeMap<String, String> = BTreeMap::new();
+        stored.insert("test.md".to_string(), "different_old_hash".to_string());
+
+        let mut edited = Vec::new();
+        let mut unreg = Vec::new();
+        check_directory(&dir, &dir, &stored, &mut edited, &mut unreg, &[]).unwrap();
+        assert!(edited.contains(&"test.md".to_string()));
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_check_directory_detects_unregistered() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_status_unreg_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("new.md");
+        std::fs::write(&file, "new file").unwrap();
+
+        let stored: BTreeMap<String, String> = BTreeMap::new();
+        let mut edited = Vec::new();
+        let mut unreg = Vec::new();
+        check_directory(&dir, &dir, &stored, &mut edited, &mut unreg, &[]).unwrap();
+        assert!(edited.is_empty());
+        assert!(unreg.contains(&"new.md".to_string()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_check_directory_unchanged() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_status_unchanged_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("stable.md");
+        std::fs::write(&file, "unchanged").unwrap();
+        let hash = hashes::compute_hash(&file).unwrap();
+
+        let mut stored: BTreeMap<String, String> = BTreeMap::new();
+        stored.insert("stable.md".to_string(), hash);
+
+        let mut edited = Vec::new();
+        let mut unreg = Vec::new();
+        check_directory(&dir, &dir, &stored, &mut edited, &mut unreg, &[]).unwrap();
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

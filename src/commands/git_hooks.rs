@@ -102,13 +102,7 @@ mod tests {
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!("speck_hooks_test_{}_{}", std::process::id(), id));
         std::fs::create_dir_all(&dir).unwrap();
-        use std::sync::Mutex;
-        static CWD_MUTEX: Mutex<()> = Mutex::new(());
-        let _lock = CWD_MUTEX.lock().unwrap();
-        let original_dir = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&dir).unwrap();
-        let result = run();
-        std::env::set_current_dir(&original_dir).unwrap();
+        let result = crate::test_utils::with_cwd_locked(&dir, run);
         std::fs::remove_dir_all(&dir).ok();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Not a git repository"));

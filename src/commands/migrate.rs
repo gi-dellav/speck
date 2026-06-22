@@ -36,6 +36,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
             "--no-session",
         ],
         &msg1,
+        None,
     )?;
 
     // Step 2: Generate specs/features from specs/technical
@@ -54,6 +55,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
             "--no-session",
         ],
         &msg2,
+        None,
     )?;
 
     // Step 3: Create Speck.toml and .speck_hash.toml

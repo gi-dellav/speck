@@ -1,3 +1,4 @@
+use crate::config::SpeckConfig;
 use crate::zerostack;
 
 pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -7,6 +8,9 @@ pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         return Err("Not a Speck project: Speck.toml not found".into());
     }
 
+    let config = SpeckConfig::from_file(&config_path)?;
+    let model = config.model.as_deref();
+
     let prompt_path = zerostack::prompt_path("speck-review.md");
     if let Some(output_path) = output {
         let result = zerostack::run(&[
@@ -15,7 +19,7 @@ pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
             "--no-session",
             "--temperature",
             "0",
-        ])?;
+        ], model)?;
         std::fs::write(&output_path, &result)?;
         println!("Review saved to {}", output_path);
     } else {
@@ -26,8 +30,26 @@ pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
             "--no-session",
             "--temperature",
             "0",
-        ])?;
+        ], model)?;
         println!("{}", result);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    fn run_review_in_dir(dir: &std::path::Path, output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+        crate::test_utils::with_cwd_locked(dir, || super::run(output))
+    }
+
+    #[test]
+    fn test_review_fails_without_speck_toml() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_review_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = run_review_in_dir(&dir, None);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Speck.toml"));
+    }
 }

@@ -1,3 +1,4 @@
+use crate::config::SpeckConfig;
 use crate::zerostack;
 use dialoguer::Input;
 
@@ -7,6 +8,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     if !config_path.exists() {
         return Err("Not a Speck project: Speck.toml not found".into());
     }
+
+    let config = SpeckConfig::from_file(&config_path)?;
 
     let tech_stack_path = project_dir.join("specs/TECH_STACK.md");
     if !tech_stack_path.exists() {
@@ -29,8 +32,39 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     zerostack::run_p(
         &["--no-session"],
         &msg,
+        config.model.as_deref(),
     )?;
 
     eprintln!("Resetting and rebuilding project...");
     crate::commands::reset::run(false, true, true)
+}
+
+#[cfg(test)]
+mod tests {
+    fn run_switch_lang_in_dir(dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+        crate::test_utils::with_cwd_locked(dir, super::run)
+    }
+
+    #[test]
+    fn test_switch_lang_fails_without_speck_toml() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_switch_lang_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let result = run_switch_lang_in_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Speck.toml"));
+    }
+
+    #[test]
+    fn test_switch_lang_fails_without_tech_stack() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_switch_lang_test2_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        let result = run_switch_lang_in_dir(&dir);
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("TECH_STACK.md"));
+    }
 }

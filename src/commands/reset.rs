@@ -67,14 +67,7 @@ mod tests {
     }
 
     fn run_in_dir(dir: &std::path::Path, hard: bool, rebuild: bool, full: bool) -> Result<(), Box<dyn std::error::Error>> {
-        use std::sync::Mutex;
-        static CWD_MUTEX: Mutex<()> = Mutex::new(());
-        let _lock = CWD_MUTEX.lock().unwrap();
-        let original = std::env::current_dir().unwrap();
-        std::env::set_current_dir(dir).unwrap();
-        let result = run(hard, rebuild, full);
-        std::env::set_current_dir(&original).unwrap();
-        result
+        crate::test_utils::with_cwd_locked(dir, || run(hard, rebuild, full))
     }
 
     #[test]

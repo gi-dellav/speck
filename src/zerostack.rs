@@ -1,7 +1,11 @@
 use std::process::{Command, Stdio};
 
-pub fn run(args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::new("zerostack")
+pub fn run(args: &[&str], model: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+    let mut cmd = Command::new("zerostack");
+    if let Some(m) = model {
+        cmd.arg("--quick-model").arg(m);
+    }
+    let output = cmd
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -13,11 +17,11 @@ pub fn run(args: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-pub fn run_p(args: &[&str], msg: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn run_p(args: &[&str], msg: &str, model: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
     let mut all_args: Vec<&str> = args.to_vec();
     all_args.push("-p");
     all_args.push(msg);
-    run(&all_args)
+    run(&all_args, model)
 }
 
 pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
