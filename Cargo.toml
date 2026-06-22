@@ -1,0 +1,10 @@
+[package]
+name = "speck"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.1", features = ["derive"] }
+dialoguer = { version = "0.12.0", features = ["history", "editor"], default-features = false }
+serde = "1.0.228"
+toml = "1.1.2"
