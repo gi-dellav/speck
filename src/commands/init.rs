@@ -82,6 +82,7 @@ pub fn run(name: Option<String>, source_path: Option<String>, skip_git: bool) ->
         ("speck-tech2code.md", include_str!("../../data/prompts/speck-tech2code.md")),
         ("speck-code2tech.md", include_str!("../../data/prompts/speck-code2tech.md")),
         ("speck-tech2feat.md", include_str!("../../data/prompts/speck-tech2feat.md")),
+        ("speck-review.md", include_str!("../../data/prompts/speck-review.md")),
     ];
     for (name, content) in prompts {
         let dest = project_dir.join(".zerostack/prompts").join(name);

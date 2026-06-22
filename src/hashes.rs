@@ -25,19 +25,7 @@ impl SpeckHashes {
         Ok(())
     }
 
-    pub fn all_files(&self) -> BTreeMap<String, String> {
-        let mut all = BTreeMap::new();
-        for (k, v) in &self.features_hash {
-            all.insert(k.clone(), v.clone());
-        }
-        for (k, v) in &self.technical_hash {
-            all.insert(k.clone(), v.clone());
-        }
-        for (k, v) in &self.src_hash {
-            all.insert(k.clone(), v.clone());
-        }
-        all
-    }
+
 }
 
 pub fn compute_hash(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {

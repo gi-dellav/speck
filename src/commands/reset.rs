@@ -35,8 +35,7 @@ pub fn run(hard: bool, rebuild: bool, full: bool) -> Result<(), Box<dyn std::err
 
     if rebuild {
         println!("Running speck apply to rebuild...");
-        // ponytail: call apply logic directly when apply is implemented
-        println!("rebuild: apply not yet implemented");
+        crate::commands::apply::run(None, false, false, false, false, false, None)?;
     }
 
     Ok(())

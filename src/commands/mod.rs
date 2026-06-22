@@ -1,7 +1,5 @@
 pub mod init;
 pub mod status;
-
-// ponytail: stubs; full implementations in follow-up PRs
 pub mod apply;
 pub mod migrate;
 pub mod review;
