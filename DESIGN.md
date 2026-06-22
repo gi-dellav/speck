@@ -1,98 +1,128 @@
 # Speck Design Document - v1.0.0-rc1
+- Speck is an agentic compiler, so a coding agent that works on pre-written
+Markdown specifications that act as a unified source-of-truth for the entire
+codebase
+- Speck is a CLI written in Rust using clap and using dialoguer for
+pickers/user prompts.
+- Speck calls zerostack for all of the agentic operations.
 
-- Speck is an agentic compiler, so a coding agent that works on pre-written Markdown specifications that act as a unified source-of-truth for the entire codebase
-- Speck is a CLI written in Rust using `clap` and using `dialoguer` for pickers/user prompts.
-- Speck calls `zerostack` for all of the agentic operations.
+This are some of the zerostack’s CLI flags that might be used by Speck:
+- `zerostack -p <msg>` allows to send a message and get the output via stdout as a simple string, without launching the TUI
+- `zerostack -p <msg>` must be at the end of the command.
+- `zerostack --pure-stdout` allows to return all of the user-facing information via stdout, making it unstructured but more human-readable
+- `zerostack --load-prompt <prompt>` allows to select a specific prompt
+- `zerostack --no-session` allows to not save in the history the session in which the agent runs
+- `zerostack --temperature <val>` allows to set the LLM’s temperature
+- `zerostack --read-only` limits the agent to only read operations
+- `zerostack --quick-model <name>` allows to set what LLM to use, as long as its name is defined in the configuration file
 
-- This are some of the zerostack's CLI flags that might be used by Speck:
-  - `zerostack -p <msg>` allows to send a message and get the output via stdout as a simple string, without launching the TUI
-  - `zerostack -p <msg>` must be at the end of the command.
-  - `zerostack --pure-stdout` allows to return all of the user-facing information via stdout, making it unstructured but more human-readable
-  - `zerostack --load-prompt <prompt>` allows to select a specific prompt
-  - `zerostack --no-session` allows to not save in the history the session in which the agent runs
-  - `zerostack --temperature <val>` allows to set the LLM's temperature
-  - `zerostack --read-only` limits the agent to only read operations
-  - `zerostack --quick-model <name>` allows to set what LLM to use, as long as its name is defined in the configuration file
-
+## Speck’s CLI Commands
 - `speck init` creates a Speck project
   - This command uses a picker to ask the user for needed input
-  - If `.git` doesn't exist, it also asks the user if it should create a Git repo via `git init .`
-- `speck migrate` migrates a pre-existing project to Speck, using an agent to fill the `specs/` directories
-  - Step 1) Generate `specs/technical` from source code using zerostack
-  - Step 2) Generate `specs/features` from `specs/technical` using zerostack
-  - Step 3) Create `Speck.toml` and `.speck_hash.toml`, using the same picker as `speck init`
-  - Step 4) Ask the user to review `specs/features`
-- `speck migrate --custom <msg>` allows to append a custom instruction to the coding agent.
-- `speck review` runs a complete review of the project. Must use `--load-prompt review` to use the correct LLM prompt for code review.
-  - By default, use `--pure-stdout` flag for zerostack.
-  - If it's given a file path, it will save there a Markdown file with the review. In that case, don't use `--pure-stdout`, as it would break stdout pipes used for getting the output text
+  - If .git doesn’t exist, it also asks the user if it should create a Git repo via git init . This logic can be skipped with `--skip-git` + should be skipped if name and source path were given via CLI.
+  - Allow to create without TUI pickers by giving name and source path via CLI.
+- `speck migrate` migrates a pre-existing project to Speck, using an agent
+to fill the specs/ directories
+  - Step 1) Generate specs/technical from source code using zerostack
+  - Step 2) Generate specs/features from specs/technical using zerostack
+  - Step 3) Create Speck.toml and .speck_hash.toml, using the same picker as speck init
+  - Step 4) Ask the user to review specs/features
+  - `speck migrate --custom <msg>` allows to append a custom instruction to the coding agent.
+- `speck review` runs a complete review of the project. Must use `--load-prompt review ` to use the correct LLM prompt for code review.
+  - By default, use --pure-stdout flag for zerostack.
+  - If it’s given a file path, it will save there a Markdown file with the review. In that case, don’t use --pure-stdout, as it would break stdout pipes used for getting the output text
 - `speck apply` fully updates the project referencing both edited specifications files and source code files
-  - This is the command that implement the core logic behind Speck's agentic compiler.
+  - This is the command that implement the core logic behind Speck’s agentic compiler.
   - This system acts based on what tracked hashes have been edited. It must also considered new files, not yet tracked by the Hashes system.
-  - This command won't do anything if there are no edited files, except for printing "there's nothing to do"
-  - Step 1) If there is edited code, update `specs/technical/`
-  - Step 2) If the flag `--update-features` is used and there is edited code or edited files in `specs/technical/`, update `specs/features/`
-  - Step 3) If there are edited files in `specs/features/`, update `specs/technical/`
-  - Step 4) If there are edited files in `specs/technical/` or edited files in `specs/features/`, update code
-  - Use `--temperature 0` for all steps except for Step 4.
+  - This command won’t do anything if there are no edited files, except for printing “there’s nothing to do”
+  - Step 1) If there is edited code, update specs/technical/
+  - Step 2) If the flag --update-features is used and there is edited code or edited files in specs/technical/, update specs/features/
+  - Step 3) If there are edited files in specs/features/, update specs/technical/
+  - Step 4) If there are edited files in specs/technical/ or edited files in specs/features/, update code
+  - Step 5) Update hashes to the current values, as all edits were correctly managed
+  - Use --temperature 0 for all steps except for Step 3.
   - In order to consider what files were edited, check against the hashes before Step 1, in order to ignore what files were edited
-- `speck apply --custom <msg>` allows to append a custom instruction to the coding agent.
-- `speck apply --only-direct/-d` only runs the specs-to-code pipeline
-- `speck apply --only-inverse/-i` only runs the code-to-specs pipeline
+  - If there is a possible conflict, where a file in specs/technical and its equivalent source code file were both edited, a user prompt should ask the user if it should consider as edited the Code file or the Specs file.
+    - The flag --prefer-code/-C always solves conflicts giving priority to Code
+    - The flag --prefer-specs/-S always solves conflicts giving priority to Specs
+  - ALWAYS pass to the underlying zerostack commands the list of edited files in the relevant category.
+  - `speck apply --custom <msg>` allows to append a custom instruction to the coding agent.
+  - `speck apply --only-direct/-d` only runs the specs-to-code pipeline
+  - `speck apply --only-inverse/-i` only runs the code-to-specs pipeline
+  - `speck apply --gen-temperature <val>` allows to set the temperature used in Step 4 (by default, just don't pass any --temperature flag)
 - `speck fmt` runs the formatting command defined in the configuration file.
   - This command only works if there are no unedited source code files.
-  - After the formatting command is run, all source code files' hashes will be updated.
-- `speck chat` just runs `zerostack && speck apply`, launching the standard TUI and then updating the project's files
-- `speck force-update` re-set all stored hashes to the hashes of the current project's files
+  - After the formatting command is run, all source code files’ hashes will be updated.
+- `speck chat` just runs zerostack && speck apply, launching the standard TUI and then updating the project’s files
+- `speck force-update` re-set all stored hashes to the hashes of the current project’s files
 - `speck reset` removes all stored hashes
-- `speck reset --hard/-h` also removes the source code's directory
-- `speck reset --rebuild/-r` also runs `speck apply` as the last operation of the command
-- `speck reset --full/-f` also removes the `specs/technical/` directory
-- `speck check` lists all unedited or unregistred files, split in:
-    - `Features (High-level Specifications)` for files in `specs/features/`
-    - `Technicals (Low-level Specifications)` for files in `specs/technical/`
-    - `Code (Source Code)` for files in the source code's directory
-  - If there are no edited files, just print "there's nothing to do"
+  - `speck reset --hard/-h` also removes the source code’s directory
+  - `speck reset --rebuild/-r` also runs speck apply as the last operation of the command
+  - `speck reset --full/-f` also removes the specs/technical/ directory
+- `speck status` lists all unedited or unregistred files, split in:
+  - Features (High-level Specifications) for files in specs/features/
+  - Technicals (Low-level Specifications) for files in specs/technical/
+  - Code (Source Code) for files in the source code’s directory
+  - (+) If there are no edited files, just print “there’s nothing to do”
 - `speck switch-lang` allows to change the tech stack of the current project
   - Step 1) Ask what is the new tech stack using a textual prompt
-  - Step 2) Update `specs/TECH_STACK.md` using zerostack
-  - Step 3) Run `speck reset --full --rebuild`
+  - Step 2) Update specs/TECH_STACK.md using zerostack
+  - Step 3) Run speck reset --full --rebuild
 - `speck mv` moves a file, both running the correct filesystem operation and updating .speck_hash.toml
 - `speck rm` removes a file, both running the correct filesystem operation and updating .speck_hash.toml
 - `speck git-hooks` allows the user to set up git hooks for the current Git/Speck project
   - This command uses a picker to ask the user what git hooks to setup.
 
-- Speck's Git Hooks:
-  - [TODO]
+## Speck’s Git Hooks:
+– check-before-commit: pre-commit hook for speck commit
+– format-before-commit: pre-commit hook for speck fmt
+– apply-before-push: pre-push hook for speck apply
+– apply-after-merge: post-merge hook for speck apply
+– apply-after-checkout: post-checkout hook for speck apply
 
+## Speck’s Prompts:
+– speck-feat2tech.md: specialized system prompt for going from specs/features to specs/technical
+– speck-tech2code.md: specialized system prompt for going from specs/technical to source code
+– speck-code2tech.md: specialized system prompt for going from source code to specs/technical
+– speck-tech2feat.md: specialized system prompt for going from specs/technical to specs/features
+
+## Speck's Project Structure
+- Both speck init and speck migrate should create a .zerostack/prompts/ directory filled with the 4 given prompts
 - Project structure (used by all projects that use Speck):
   - Speck.toml is the main configuration file for defining the attributes of the project
-  - `.speck_hash.toml` is the main data file for storing files' hashes
-  - `AGENTS.md` is the main directives file, used for giving the agent's instructions for the entire project
-  - `ARCHITECTURE.md` is the main documentation file, describing in a quick way the structure of the codebase
-  - `specs/` is the directory where all Markdown specifications files are stored
-  - `specs/TECH_STACK.md` is the core technical specifications file, where the language, tech stack and core dependencies are defined
-  - `specs/features/` is the directory for high-level specifications files, containing only descriptions of the features implemented in the product, without any technical description
-  - `specs/technical/` is the directory for low-level specifications files, acting as a extremely detailed technical documentation with ability to store small code snippets (max 5 lines per example) and used to store technical decisions (so not only HOW it works, but also WHY it works that way)
+  - .speck_hash.toml is the main data file for storing files’ hashes
+  - AGENTS.md is the main directives file, used for giving the agent’s instructions for the entire project
+  - ARCHITECTURE.md is the main documentation file, describing in a quick way the structure of the codebase
+  - specs/ is the directory where all Markdown specifications files are stored
+  - specs/TECH_STACK.md is the core technical specifications file, where the language, tech stack and core dependencies are defined
+  - specs/features/ is the directory for high-level specifications files, containing only descriptions of the features implemented in the product, without any technical description
+  - specs/technical/ is the directory for low-level specifications files, acting as a extremely detailed technical documentation with ability to store small code snippets (max 5 lines per example) and used to store technical decisions (so not only HOW it works, but also WHY it works that way)
+    - specs/technical/ should follow on a 1:1 basis the source code itself, using the same file names and same structures as the source code
 
-- Speck should ship with a default AGENTS.md file to be used on new empty projects (`speck init`)
-- Speck should ship with a default ARCHTECTURE.md file to be used on new empty projects (`speck init`)
-- Speck should ship with a snippet for AGENTS.md files to be applied on pre-existing projects (`speck migrate`)
+## Additional Information
+- Speck should ship with a default AGENTS.md file to be used on new empty projects (speck init)
+- Speck should ship with a default ARCHTECTURE.md file to be used on new empty projects (speck init)
+- Speck should ship with a snippet for AGENTS.md files to be applied on pre-existing projects (speck migrate)
 
-- Speck should always check that `Speck.toml` and `.speck_hash.toml` are NOT in the `.gitignore`, as it would break Speck
-- Speck should ALWAYS use `--temperature 0` for all stages EXCEPT for stages that need to pass from high-level specifications to low-level specifications
-- Speck's Hash system should ALWAYS ignore `specs/_*.md` files, as they are considered to be ignored
-- Speck's Hash system should ALWAYS ignore files in the `.gitignore`, as they are considered to be ignored
-- Speck's Hash system should ALWAYS consider files that are not in `.speck_hash.toml` are unedited files that need to be managed
+- Speck should always check that Speck.toml and .speck_hash.toml are NOT in the .gitignore, as it would break Speck
+- Speck should ALWAYS use --temperature 0 for all stages EXCEPT for stages that need to pass from high-level specifications to low-level specifications
+- Speck’s Hash system should ALWAYS ignore specs/_*.md files, as they are considered to be ignored
+- Speck’s Hash system should ALWAYS ignore files in the .gitignore, as they are considered to be ignored
+- Speck’s Hash system should ALWAYS consider files that are not in .speck_hash.toml are unedited files that need to be managed
 
-- Fields of Speck.toml
-  - `name`: name of the project (by default, same as name of the directory)
-  - `source_dir`: path for the source code directory ("src" by default)
-  - `model`: optional; default model to be used
-  - `features_dir`: optional; default path to be used for storing high-level specifications instead of `specs/features/`. This allows to use multiple codebases inside the same final product.
-  - `fmt_cmd`: optional; command to run a formatter in the current project
-  - `test_cmd`: optional; command to run unit tests in the current project
+- Fields of `Speck.toml`
+  - name: name of the project (by default, same as name of the directory)
+  - source_dir: path for the source code directory (“src” by default)
+  - model: optional; default model to be used
+  - features_dir: optional; default path to be used for storing high-level specifications instead of specs/features/. This allows to use multiple codebases inside the same final product.
+  - fmt_cmd: optional; command to run a formatter in the current project
+  - test_cmd: optional; command to run unit tests in the current project
+
 - Fields of `.speck_hash.toml`
-  - `features_hash`: dictionary of hashes of files in `specs/features/`
-  - `technical_hash`: dictionary of hashes of files in `specs/technical`
-  - `src_hash`: dictionary of hashes of files in the source code dir defined in Speck.toml
+  - features_hash: dictionary of hashes of files in specs/features/
+  - technical_hash: dictionary of hashes of files in specs/technical
+  - src_hash: dictionary of hashes of files in the source code dir defined in Speck.toml
+
+- Write a significant amount of unit tests for all code parts that don’t call zerostack.
+- Check that unit tests cover ALL of the edge cases definable in thosefunctions.
+
