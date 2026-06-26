@@ -78,7 +78,11 @@ pub enum Command {
     /// List all unedited or unregistered files
     Status,
     /// Change the tech stack of the current project
-    SwitchLang,
+    SwitchLang {
+        /// Keep specs/technical/ (skip full reset — only hard + rebuild)
+        #[arg(long)]
+        safe: bool,
+    },
     /// Move a file and update .speck_hash.toml
     Mv {
         /// Source path

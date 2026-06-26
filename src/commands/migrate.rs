@@ -82,20 +82,20 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize hashes from current file state
     let mut hashes = SpeckHashes::default();
-    let gitignore_patterns = helpers::load_gitignore()?;
+    let gitignore = helpers::load_gitignore()?;
 
     let features_path = PathBuf::from(config.features_path());
     let technical_path = PathBuf::from(SpeckConfig::technical_path());
     let src_path = PathBuf::from(&config.source_dir);
 
     if features_path.exists() {
-        helpers::collect_hashes(&features_path, &mut hashes.features_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&features_path, &mut hashes.features_hash, &gitignore)?;
     }
     if technical_path.exists() {
-        helpers::collect_hashes(&technical_path, &mut hashes.technical_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&technical_path, &mut hashes.technical_hash, &gitignore)?;
     }
     if src_path.exists() {
-        helpers::collect_hashes(&src_path, &mut hashes.src_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(&src_path, &mut hashes.src_hash, &gitignore)?;
     }
     hashes.to_file(&project_dir.join(".speck_hash.toml"))?;
 

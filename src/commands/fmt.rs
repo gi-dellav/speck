@@ -1,5 +1,5 @@
 use crate::config::SpeckConfig;
-use crate::hashes::{self, SpeckHashes};
+use crate::hashes::SpeckHashes;
 use crate::helpers;
 use std::process::Command;
 
@@ -20,29 +20,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let src_path = std::path::PathBuf::from(&config.source_dir);
     if src_path.exists() {
-        let gitignore_patterns = helpers::load_gitignore()?;
-        for entry in walkdir::WalkDir::new(&src_path)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_file())
-        {
-            let rel = entry.path().strip_prefix(&project_dir)?;
-            let rel_str = rel.to_string_lossy().to_string();
-
-            if helpers::is_ignored_file(&rel_str, entry.path(), &gitignore_patterns) {
-                continue;
-            }
-
-            let current_hash = hashes::compute_hash(&entry.path().to_path_buf())?;
-            if let Some(stored_hash) = stored_hashes.src_hash.get(&rel_str)
-                && &current_hash != stored_hash
-            {
-                return Err(format!(
-                    "Cannot format: source file '{}' has uncommitted edits. Run `speck apply` first.",
-                    rel_str
-                )
-                .into());
-            }
+        let gitignore = helpers::load_gitignore()?;
+        let (edited, _) = helpers::scan_directory(&src_path, &stored_hashes.src_hash, &gitignore)?;
+        if !edited.is_empty() {
+            return Err(format!(
+                "Cannot format: source file '{}' has uncommitted edits. Run `speck apply` first.",
+                edited[0]
+            )
+            .into());
         }
     }
 
@@ -64,8 +49,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut hashes = SpeckHashes::from_file(&hash_path)?;
     hashes.src_hash.clear();
     if src_path.exists() {
-        let gitignore_patterns = helpers::load_gitignore()?;
-        helpers::collect_hashes(&src_path, &mut hashes.src_hash, &gitignore_patterns)?;
+        let gitignore = helpers::load_gitignore()?;
+        helpers::collect_hashes(&src_path, &mut hashes.src_hash, &gitignore)?;
     }
     hashes.to_file(&hash_path)?;
 

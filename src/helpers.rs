@@ -1,21 +1,25 @@
 use crate::hashes;
+use ignore::gitignore::Gitignore;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-pub fn load_gitignore() -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let gitignore_path = std::env::current_dir()?.join(".gitignore");
+pub fn load_gitignore() -> Result<Gitignore, Box<dyn std::error::Error>> {
+    let project_dir = std::env::current_dir()?;
+    let gitignore_path = project_dir.join(".gitignore");
     if !gitignore_path.exists() {
-        return Ok(Vec::new());
+        return Ok(Gitignore::empty());
     }
-    let content = std::fs::read_to_string(gitignore_path)?;
-    Ok(content
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .collect())
+    let (gitignore, err) = Gitignore::new(&gitignore_path);
+    if let Some(e) = err {
+        eprintln!("Warning: error reading .gitignore: {}", e);
+    }
+    Ok(gitignore)
 }
 
-pub fn is_ignored_file(rel_str: &str, path: &Path, gitignore_patterns: &[String]) -> bool {
+pub fn is_ignored_file(rel_str: &str, path: &Path, gitignore: &Gitignore) -> bool {
+    if rel_str == "Speck.toml" || rel_str == ".speck_hash.toml" {
+        return true;
+    }
     if rel_str.starts_with("specs/")
         && path
             .file_name()
@@ -24,23 +28,15 @@ pub fn is_ignored_file(rel_str: &str, path: &Path, gitignore_patterns: &[String]
     {
         return true;
     }
-    if rel_str == "Speck.toml" || rel_str == ".speck_hash.toml" {
+    if gitignore.matched(path, false).is_ignore() {
         return true;
     }
-    for pattern in gitignore_patterns {
-        if pattern.contains('*') {
-            let regex_pattern = pattern
-                .replace('.', "\\.")
-                .replace('*', ".*")
-                .replace('?', ".");
-            if let Ok(re) = regex::Regex::new(&format!("^{}$", regex_pattern))
-                && re.is_match(rel_str)
-            {
-                return true;
-            }
-        } else if rel_str.starts_with(pattern) {
+    let mut ancestor = path.parent();
+    while let Some(dir) = ancestor {
+        if gitignore.matched(dir, true).is_ignore() {
             return true;
         }
+        ancestor = dir.parent();
     }
     false
 }
@@ -48,7 +44,7 @@ pub fn is_ignored_file(rel_str: &str, path: &Path, gitignore_patterns: &[String]
 pub fn collect_hashes(
     dir: &Path,
     map: &mut BTreeMap<String, String>,
-    gitignore_patterns: &[String],
+    gitignore: &Gitignore,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let project_dir = std::env::current_dir()?;
     let absolute_dir = if dir.is_relative() {
@@ -63,13 +59,51 @@ pub fn collect_hashes(
     {
         let rel = entry.path().strip_prefix(&project_dir)?;
         let rel_str = rel.to_string_lossy().to_string();
-        if is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
+        if is_ignored_file(&rel_str, entry.path(), gitignore) {
             continue;
         }
         let hash = hashes::compute_hash(&entry.path().to_path_buf())?;
         map.insert(rel_str, hash);
     }
     Ok(())
+}
+
+pub fn scan_directory(
+    dir: &Path,
+    stored: &BTreeMap<String, String>,
+    gitignore: &Gitignore,
+) -> Result<(Vec<String>, Vec<String>), Box<dyn std::error::Error>> {
+    let mut edited = Vec::new();
+    let mut unregistered = Vec::new();
+    let project_dir = std::env::current_dir()?;
+    let absolute_dir = if dir.is_relative() {
+        project_dir.join(dir)
+    } else {
+        dir.to_path_buf()
+    };
+    if !absolute_dir.exists() {
+        return Ok((edited, unregistered));
+    }
+    for entry in walkdir::WalkDir::new(&absolute_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+    {
+        let rel = entry.path().strip_prefix(&project_dir)?;
+        let rel_str = rel.to_string_lossy().to_string();
+        if is_ignored_file(&rel_str, entry.path(), gitignore) {
+            continue;
+        }
+        if let Some(stored_hash) = stored.get(&rel_str) {
+            let current = hashes::compute_hash(&entry.path().to_path_buf())?;
+            if current != *stored_hash {
+                edited.push(rel_str);
+            }
+        } else {
+            unregistered.push(rel_str);
+        }
+    }
+    Ok((edited, unregistered))
 }
 
 pub fn ensure_not_gitignored(project_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -101,42 +135,146 @@ pub fn ensure_not_gitignored(project_dir: &Path) -> Result<(), Box<dyn std::erro
 mod tests {
     use super::*;
 
+    fn with_cwd_locked<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
+        crate::test_utils::with_cwd_locked(dir, f)
+    }
+
     #[test]
     fn test_is_ignored_file_speck_metadata() {
-        let patterns: Vec<String> = vec![];
+        let gitignore = Gitignore::empty();
         assert!(is_ignored_file(
             "Speck.toml",
             Path::new("Speck.toml"),
-            &patterns
+            &gitignore
         ));
         assert!(is_ignored_file(
             ".speck_hash.toml",
             Path::new(".speck_hash.toml"),
-            &patterns
+            &gitignore
         ));
     }
 
     #[test]
     fn test_is_ignored_file_underscore_md() {
-        let patterns: Vec<String> = vec![];
+        let gitignore = Gitignore::empty();
         assert!(is_ignored_file(
             "specs/_draft.md",
             Path::new("specs/_draft.md"),
-            &patterns
+            &gitignore
         ));
         assert!(!is_ignored_file(
             "specs/features/auth.md",
             Path::new("specs/features/auth.md"),
-            &patterns
+            &gitignore
         ));
     }
 
     #[test]
     fn test_is_ignored_file_gitignore_pattern() {
-        let patterns = vec!["target".to_string(), "*.log".to_string()];
-        assert!(is_ignored_file("target/debug/foo", Path::new("target/debug/foo"), &patterns));
-        assert!(is_ignored_file("debug.log", Path::new("debug.log"), &patterns));
-        assert!(!is_ignored_file("src/main.rs", Path::new("src/main.rs"), &patterns));
+        let dir = std::env::temp_dir()
+            .join(format!("speck_gi_test_{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("target/debug")).unwrap();
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join(".gitignore"), "target\n*.log\n").unwrap();
+        let (gi, err) = Gitignore::new(&dir.join(".gitignore"));
+        if let Some(e) = err {
+            panic!("Gitignore error: {}", e);
+        }
+        std::fs::write(dir.join("target/debug/foo"), "build artifact").unwrap();
+        std::fs::write(dir.join("debug.log"), "log content").unwrap();
+        std::fs::write(dir.join("src/main.rs"), "fn main() {}").unwrap();
+
+        let (_edited, unreg) = with_cwd_locked(&dir, || {
+            let stored = std::collections::BTreeMap::new();
+            scan_directory(Path::new("."), &stored, &gi).unwrap()
+        });
+        assert!(unreg.contains(&"src/main.rs".to_string()));
+        assert!(!unreg.contains(&"target/debug/foo".to_string()));
+        assert!(!unreg.contains(&"debug.log".to_string()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_scan_directory_detects_edited_and_unregistered() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_scan_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_edited = dir.join("edited.txt");
+        let file_new = dir.join("new.txt");
+        std::fs::write(&file_edited, "modified content").unwrap();
+        std::fs::write(&file_new, "new file").unwrap();
+
+        let mut stored = BTreeMap::new();
+        stored.insert("edited.txt".to_string(), "old_hash".to_string());
+        let gitignore = Gitignore::empty();
+
+        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        assert!(edited.contains(&"edited.txt".to_string()));
+        assert!(unreg.contains(&"new.txt".to_string()));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_scan_directory_unchanged() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_scan_uc_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("stable.txt");
+        std::fs::write(&file, "unchanged").unwrap();
+        let hash = hashes::compute_hash(&file).unwrap();
+
+        let mut stored = BTreeMap::new();
+        stored.insert("stable.txt".to_string(), hash);
+        let gitignore = Gitignore::empty();
+
+        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_scan_directory_skips_ignored() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_scan_ign_{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("specs")).unwrap();
+        let file = dir.join("specs/_draft.md");
+        std::fs::write(&file, "# draft").unwrap();
+        let stored = BTreeMap::new();
+        let gitignore = Gitignore::empty();
+
+        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_scan_directory_empty_dir() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_scan_empty_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let stored = BTreeMap::new();
+        let gitignore = Gitignore::empty();
+
+        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_scan_directory_missing_dir() {
+        let stored = BTreeMap::new();
+        let gitignore = Gitignore::empty();
+        let (edited, unreg) = scan_directory(
+            Path::new("/nonexistent_dir"),
+            &stored,
+            &gitignore,
+        )
+        .unwrap();
+        assert!(edited.is_empty());
+        assert!(unreg.is_empty());
     }
 
     #[test]

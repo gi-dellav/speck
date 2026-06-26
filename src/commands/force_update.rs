@@ -22,21 +22,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let features_path = Path::new(config.features_path());
     let technical_path = Path::new(SpeckConfig::technical_path());
     let src_path = Path::new(&config.source_dir);
-    let gitignore_patterns = helpers::load_gitignore()?;
+    let gitignore = helpers::load_gitignore()?;
 
     hashes.features_hash.clear();
     if features_path.exists() {
-        helpers::collect_hashes(features_path, &mut hashes.features_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(features_path, &mut hashes.features_hash, &gitignore)?;
     }
 
     hashes.technical_hash.clear();
     if technical_path.exists() {
-        helpers::collect_hashes(technical_path, &mut hashes.technical_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(technical_path, &mut hashes.technical_hash, &gitignore)?;
     }
 
     hashes.src_hash.clear();
     if src_path.exists() {
-        helpers::collect_hashes(src_path, &mut hashes.src_hash, &gitignore_patterns)?;
+        helpers::collect_hashes(src_path, &mut hashes.src_hash, &gitignore)?;
     }
 
     hashes.to_file(&hash_path)?;

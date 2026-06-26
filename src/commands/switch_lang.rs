@@ -1,8 +1,8 @@
 use crate::config::SpeckConfig;
 use crate::zerostack;
-use dialoguer::Input;
+use dialoguer::{Confirm, Input};
 
-pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(safe: bool) -> Result<(), Box<dyn std::error::Error>> {
     let project_dir = std::env::current_dir()?;
     let config_path = project_dir.join("Speck.toml");
     if !config_path.exists() {
@@ -14,6 +14,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let tech_stack_path = project_dir.join("specs/TECH_STACK.md");
     if !tech_stack_path.exists() {
         return Err("specs/TECH_STACK.md not found. Run `speck init` first.".into());
+    }
+
+    if !safe {
+        eprintln!("WARNING: speck switch-lang will DELETE all source code in {}/ and all of specs/technical/.", config.source_dir);
+        eprintln!("It will then regenerate everything from specs/features/ and TECH_STACK.md using the AI agent.");
+        eprintln!("Consider committing your work first.\n");
+        let proceed = Confirm::new()
+            .with_prompt("Proceed with destructive switch-lang?")
+            .default(false)
+            .interact()?;
+        if !proceed {
+            println!("Aborted.");
+            return Ok(());
+        }
     }
 
     let current = std::fs::read_to_string(&tech_stack_path)?;
@@ -35,14 +49,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         config.model.as_deref(),
     )?;
 
-    eprintln!("Resetting and rebuilding project...");
-    crate::commands::reset::run(false, true, true)
+    if safe {
+        eprintln!("Resetting and rebuilding project (safe mode — keeping specs/technical)...");
+        crate::commands::reset::run(true, true, false)
+    } else {
+        eprintln!("Resetting and rebuilding project...");
+        crate::commands::reset::run(true, true, true)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    fn run_switch_lang_in_dir(dir: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-        crate::test_utils::with_cwd_locked(dir, super::run)
+    fn run_switch_lang_in_dir(dir: &std::path::Path, safe: bool) -> Result<(), Box<dyn std::error::Error>> {
+        crate::test_utils::with_cwd_locked(dir, || super::run(safe))
     }
 
     #[test]
@@ -50,7 +69,7 @@ mod tests {
         let dir = std::env::temp_dir()
             .join(format!("speck_switch_lang_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let result = run_switch_lang_in_dir(&dir);
+        let result = run_switch_lang_in_dir(&dir, false);
         std::fs::remove_dir_all(&dir).ok();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Speck.toml"));
@@ -62,7 +81,7 @@ mod tests {
             .join(format!("speck_switch_lang_test2_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
-        let result = run_switch_lang_in_dir(&dir);
+        let result = run_switch_lang_in_dir(&dir, false);
         std::fs::remove_dir_all(&dir).ok();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("TECH_STACK.md"));

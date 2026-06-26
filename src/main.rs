@@ -40,8 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cli::Command::Status => {
             commands::status::run()
         }
-        cli::Command::SwitchLang => {
-            commands::switch_lang::run()
+        cli::Command::SwitchLang { safe } => {
+            commands::switch_lang::run(safe)
         }
         cli::Command::Mv { source, dest } => {
             commands::mv::run(source, dest)

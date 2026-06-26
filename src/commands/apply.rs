@@ -1,10 +1,9 @@
 use crate::config::SpeckConfig;
-use crate::hashes::{self, SpeckHashes};
+use crate::hashes::SpeckHashes;
 use crate::helpers;
 use crate::zerostack;
 use dialoguer::Confirm;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub fn run(
     custom: Option<String>,
@@ -33,16 +32,15 @@ pub fn run(
     let technical_path = PathBuf::from(SpeckConfig::technical_path());
     let src_path = PathBuf::from(&config.source_dir);
 
-    // Snapshot edited files before any changes
-    let gitignore_patterns = helpers::load_gitignore()?;
-    let edited_src = edited_files(&src_path, &stored_hashes.src_hash, &gitignore_patterns)?;
-    let edited_tech = edited_files(&technical_path, &stored_hashes.technical_hash, &gitignore_patterns)?;
-    let edited_feat = edited_files(&features_path, &stored_hashes.features_hash, &gitignore_patterns)?;
+    let gitignore = helpers::load_gitignore()?;
 
-    // Include unregistered files
-    let unreg_src = unregistered_files(&src_path, &stored_hashes.src_hash, &gitignore_patterns)?;
-    let unreg_tech = unregistered_files(&technical_path, &stored_hashes.technical_hash, &gitignore_patterns)?;
-    let unreg_feat = unregistered_files(&features_path, &stored_hashes.features_hash, &gitignore_patterns)?;
+    // Snapshot edited + unregistered files before any changes
+    let (edited_src, unreg_src) =
+        helpers::scan_directory(&src_path, &stored_hashes.src_hash, &gitignore)?;
+    let (edited_tech, unreg_tech) =
+        helpers::scan_directory(&technical_path, &stored_hashes.technical_hash, &gitignore)?;
+    let (edited_feat, unreg_feat) =
+        helpers::scan_directory(&features_path, &stored_hashes.features_hash, &gitignore)?;
 
     let all_edited_src: Vec<String> = edited_src.iter().chain(unreg_src.iter()).cloned().collect();
     let all_edited_tech: Vec<String> = edited_tech.iter().chain(unreg_tech.iter()).cloned().collect();
@@ -53,7 +51,7 @@ pub fn run(
         return Ok(());
     }
 
-    // Conflict detection: a file in src/ and its counterpart in specs/technical/ both edited
+    // Conflict detection
     let conflicts = detect_conflicts(&all_edited_src, &all_edited_tech, &config.source_dir);
     let resolved_src = if !conflicts.is_empty() {
         resolve_conflicts(&conflicts, prefer_code, prefer_specs)?
@@ -86,7 +84,6 @@ pub fn run(
         eprintln!("Step 1/4: Updating specs/technical from source code...");
         let msg = build_message(
             "Update the technical specifications to match the edited source code files.",
-            &resolved_src,
             &format!(
                 "These source files were edited:\n{}\n\nUpdate the corresponding files in specs/technical/.",
                 resolved_src.join("\n")
@@ -103,7 +100,9 @@ pub fn run(
             ],
             &msg,
             config.model.as_deref(),
-        )?;
+        )
+        .map_err(|e| format!("Step 1/4 (code → specs/technical) failed: {}", e))?;
+        save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
     }
 
     // Step 2: specs/technical → specs/features (only with --update-features)
@@ -111,7 +110,6 @@ pub fn run(
         eprintln!("Step 2/4: Updating specs/features from specs/technical...");
         let msg = build_message(
             "Update the high-level feature specifications to reflect changes in the technical specifications.",
-            &resolved_tech,
             &format!(
                 "These technical spec files were updated:\n{}\n\nUpdate specs/features/ accordingly.",
                 resolved_tech.join("\n")
@@ -128,7 +126,9 @@ pub fn run(
             ],
             &msg,
             config.model.as_deref(),
-        )?;
+        )
+        .map_err(|e| format!("Step 2/4 (specs/technical → specs/features) failed: {}", e))?;
+        save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
     }
 
     // Step 3: specs/features → specs/technical
@@ -136,7 +136,6 @@ pub fn run(
         eprintln!("Step 3/4: Updating specs/technical from specs/features...");
         let msg = build_message(
             "Update the technical specifications to implement the edited feature specifications.",
-            &all_edited_feat,
             &format!(
                 "These feature spec files were edited:\n{}\n\nUpdate specs/technical/ accordingly.",
                 all_edited_feat.join("\n")
@@ -153,7 +152,9 @@ pub fn run(
             ],
             &msg,
             config.model.as_deref(),
-        )?;
+        )
+        .map_err(|e| format!("Step 3/4 (specs/features → specs/technical) failed: {}", e))?;
+        save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
     }
 
     // Step 4: specs/technical + specs/features → source code
@@ -165,7 +166,6 @@ pub fn run(
         relevant.extend(all_edited_feat.clone());
         let msg = build_message(
             "Update the source code to match the edited specification files.",
-            &relevant,
             &format!(
                 "These spec files were edited:\n{}\n\nUpdate the source code in {}/ accordingly.",
                 relevant.join("\n"),
@@ -185,90 +185,44 @@ pub fn run(
             args.push("--temperature");
             args.push(&temp_str);
         }
-        zerostack::run_p(&args, &msg, config.model.as_deref())?;
+        zerostack::run_p(&args, &msg, config.model.as_deref())
+            .map_err(|e| format!("Step 4/4 (specifications → source code) failed: {}", e))?;
     }
 
-    // Step 5: Update hashes
-    eprintln!("Updating hashes...");
-    let mut new_hashes = SpeckHashes::default();
-    if features_path.exists() {
-        helpers::collect_hashes(&features_path, &mut new_hashes.features_hash, &gitignore_patterns)?;
-    }
-    if technical_path.exists() {
-        helpers::collect_hashes(&technical_path, &mut new_hashes.technical_hash, &gitignore_patterns)?;
-    }
-    if src_path.exists() {
-        helpers::collect_hashes(&src_path, &mut new_hashes.src_hash, &gitignore_patterns)?;
-    }
-    new_hashes.to_file(&hash_path)?;
+    // Final hash save
+    save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
 
     println!("Apply complete.");
     Ok(())
 }
 
-fn build_message(intro: &str, _files: &[String], detail: &str, custom: &Option<String>) -> String {
+fn save_hashes(
+    hash_path: &PathBuf,
+    features_path: &Path,
+    technical_path: &Path,
+    src_path: &Path,
+    gitignore: &ignore::gitignore::Gitignore,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut hashes = SpeckHashes::default();
+    if features_path.exists() {
+        helpers::collect_hashes(features_path, &mut hashes.features_hash, gitignore)?;
+    }
+    if technical_path.exists() {
+        helpers::collect_hashes(technical_path, &mut hashes.technical_hash, gitignore)?;
+    }
+    if src_path.exists() {
+        helpers::collect_hashes(src_path, &mut hashes.src_hash, gitignore)?;
+    }
+    hashes.to_file(hash_path)?;
+    Ok(())
+}
+
+fn build_message(intro: &str, detail: &str, custom: &Option<String>) -> String {
     let mut msg = format!("{}\n\n{}", intro, detail);
     if let Some(c) = custom {
         msg.push_str(&format!("\n\nAdditional instructions: {}", c));
     }
     msg
-}
-
-fn edited_files(
-    dir: &PathBuf,
-    stored: &BTreeMap<String, String>,
-    gitignore_patterns: &[String],
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut result = Vec::new();
-    if !dir.exists() {
-        return Ok(result);
-    }
-    let project_dir = std::env::current_dir()?;
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file())
-    {
-        let rel = entry.path().strip_prefix(&project_dir)?;
-        let rel_str = rel.to_string_lossy().to_string();
-        if helpers::is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
-            continue;
-        }
-        if let Some(stored_hash) = stored.get(&rel_str) {
-            let current = hashes::compute_hash(&entry.path().to_path_buf())?;
-            if current != *stored_hash {
-                result.push(rel_str);
-            }
-        }
-    }
-    Ok(result)
-}
-
-fn unregistered_files(
-    dir: &PathBuf,
-    stored: &BTreeMap<String, String>,
-    gitignore_patterns: &[String],
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut result = Vec::new();
-    if !dir.exists() {
-        return Ok(result);
-    }
-    let project_dir = std::env::current_dir()?;
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file())
-    {
-        let rel = entry.path().strip_prefix(&project_dir)?;
-        let rel_str = rel.to_string_lossy().to_string();
-        if helpers::is_ignored_file(&rel_str, entry.path(), gitignore_patterns) {
-            continue;
-        }
-        if !stored.contains_key(&rel_str) {
-            result.push(rel_str);
-        }
-    }
-    Ok(result)
 }
 
 fn detect_conflicts(src_files: &[String], tech_files: &[String], source_dir: &str) -> Vec<(String, String)> {
@@ -368,7 +322,6 @@ mod tests {
     fn test_build_message_with_custom() {
         let msg = build_message(
             "Intro",
-            &["file1".to_string()],
             "Details here",
             &Some("Custom note".to_string()),
         );
@@ -381,7 +334,6 @@ mod tests {
     fn test_build_message_without_custom() {
         let msg = build_message(
             "Intro",
-            &[],
             "Details",
             &None,
         );
