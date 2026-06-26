@@ -1,7 +1,14 @@
 [package]
 name = "speck"
-version = "0.1.0"
+version = "1.0.0-rc1"
 edition = "2024"
+authors = ["Giuseppe Della Vedova"]
+description = "Spec-driven agentic compiler, built on top of zerostack"
+license = "GPL-3.0-only"
+homepage = "https://github.com/gi-dellav/speck"
+repository = "https://github.com/gi-dellav/speck"
+readme = "README.md"
+keywords = ["ai", "cli", "dev"]
 
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
