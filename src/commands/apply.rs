@@ -90,7 +90,7 @@ pub fn run(
             ),
             &custom,
         );
-        zerostack::run_p(
+        zerostack::run_p_streamed(
             &[
                 "--load-prompt",
                 &zerostack::prompt_name("speck-code2tech.md"),
@@ -116,7 +116,7 @@ pub fn run(
             ),
             &custom,
         );
-        zerostack::run_p(
+        zerostack::run_p_streamed(
             &[
                 "--load-prompt",
                 &zerostack::prompt_name("speck-tech2feat.md"),
@@ -142,7 +142,7 @@ pub fn run(
             ),
             &custom,
         );
-        zerostack::run_p(
+        zerostack::run_p_streamed(
             &[
                 "--load-prompt",
                 &zerostack::prompt_name("speck-feat2tech.md"),
@@ -185,7 +185,7 @@ pub fn run(
             args.push("--temperature");
             args.push(&temp_str);
         }
-        zerostack::run_p(&args, &msg, config.model.as_deref())
+        zerostack::run_p_streamed(&args, &msg, config.model.as_deref())
             .map_err(|e| format!("Step 4/4 (specifications → source code) failed: {}", e))?;
     }
 

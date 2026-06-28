@@ -31,6 +31,30 @@ pub fn run_p(args: &[&str], msg: &str, model: Option<&str>) -> Result<String, Bo
     run(&all_args, model)
 }
 
+/// Runs zerostack non-interactively in print mode, streaming its output
+/// straight to the terminal instead of capturing it.
+///
+/// Use this for agent runs whose textual output the caller does not consume
+/// (e.g. `migrate`, `apply`): capturing stdout would hide all live progress and
+/// make a long-running agent look frozen. stdin is null so interactive prompts
+/// (like the one-time ARCHITECTURE.md question) read EOF and proceed.
+pub fn run_p_streamed(args: &[&str], msg: &str, model: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::new("zerostack");
+    if let Some(m) = model {
+        cmd.arg("--quick-model").arg(m);
+    }
+    let status = cmd
+        .args(args)
+        .arg("-p")
+        .arg(msg)
+        .stdin(Stdio::null())
+        .status()?;
+    if !status.success() {
+        return Err(format!("zerostack {} (see output above)", status).into());
+    }
+    Ok(())
+}
+
 pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
     let status = Command::new("zerostack")
         .status()?;

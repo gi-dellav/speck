@@ -41,7 +41,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         &custom,
     );
     std::fs::create_dir_all(project_dir.join("specs/technical"))?;
-    zerostack::run_p(
+    zerostack::run_p_streamed(
         &[
             "--load-prompt",
             &zerostack::prompt_name("speck-code2tech.md"),
@@ -62,7 +62,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         &custom,
     );
     std::fs::create_dir_all(project_dir.join("specs/features"))?;
-    zerostack::run_p(
+    zerostack::run_p_streamed(
         &[
             "--load-prompt",
             &zerostack::prompt_name("speck-tech2feat.md"),
