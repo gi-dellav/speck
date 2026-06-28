@@ -1,4 +1,5 @@
 use crate::hashes::SpeckHashes;
+use crate::helpers;
 use std::path::Path;
 
 pub fn run(path: String) -> Result<(), Box<dyn std::error::Error>> {
@@ -22,7 +23,7 @@ pub fn run(path: String) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut hashes = SpeckHashes::from_file(&hash_path)?;
-    let rel = target.strip_prefix(&project_dir)?.to_string_lossy().to_string();
+    let rel = helpers::project_relative(target, &project_dir)?;
 
     hashes.features_hash.remove(&rel);
     hashes.technical_hash.remove(&rel);
