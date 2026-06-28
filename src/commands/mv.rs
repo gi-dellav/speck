@@ -1,5 +1,6 @@
 use crate::config::SpeckConfig;
 use crate::hashes::{self, SpeckHashes};
+use crate::helpers;
 use std::path::Path;
 
 pub fn run(source: String, dest: String) -> Result<(), Box<dyn std::error::Error>> {
@@ -26,8 +27,8 @@ pub fn run(source: String, dest: String) -> Result<(), Box<dyn std::error::Error
     std::fs::rename(src_path, dst_path)?;
 
     let mut hashes = SpeckHashes::from_file(&hash_path)?;
-    let rel_src = src_path.strip_prefix(&project_dir)?.to_string_lossy().to_string();
-    let rel_dst = dst_path.strip_prefix(&project_dir)?.to_string_lossy().to_string();
+    let rel_src = helpers::project_relative(src_path, &project_dir)?;
+    let rel_dst = helpers::project_relative(dst_path, &project_dir)?;
 
     hashes.features_hash.remove(&rel_src);
     hashes.technical_hash.remove(&rel_src);
