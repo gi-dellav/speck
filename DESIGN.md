@@ -40,7 +40,7 @@ to fill the specs/ directories
   - Step 3) If there are edited files in specs/features/, update specs/technical/
   - Step 4) If there are edited files in specs/technical/ or edited files in specs/features/, update code
   - Step 5) Update hashes to the current values, as all edits were correctly managed
-  - Use --temperature 0 for all steps except for Step 3.
+  - Use --temperature 0 for all steps except for Step 3, which should not pass any --temperature flag (falling back to the model's default).
   - In order to consider what files were edited, check against the hashes before Step 1, in order to ignore what files were edited
   - If there is a possible conflict, where a file in specs/technical and its equivalent source code file were both edited, a user prompt should ask the user if it should consider as edited the Code file or the Specs file.
     - The flag --prefer-code/-C always solves conflicts giving priority to Code
@@ -105,7 +105,7 @@ to fill the specs/ directories
 - Speck should ship with a snippet for AGENTS.md files to be applied on pre-existing projects (speck migrate)
 
 - Speck should always check that Speck.toml and .speck_hash.toml are NOT in the .gitignore, as it would break Speck
-- Speck should ALWAYS use --temperature 0 for all stages EXCEPT for stages that need to pass from high-level specifications to low-level specifications
+- Speck should ALWAYS use --temperature 0 for all stages EXCEPT for stages that need to pass from high-level specifications to low-level specifications (which should not pass any --temperature flag)
 - Speck’s Hash system should ALWAYS ignore specs/_*.md files, as they are considered to be ignored
 - Speck’s Hash system should ALWAYS ignore files in the .gitignore, as they are considered to be ignored
 - Speck’s Hash system should ALWAYS consider files that are not in .speck_hash.toml are unedited files that need to be managed

@@ -146,8 +146,6 @@ pub fn run(
             &[
                 "--load-prompt",
                 &zerostack::prompt_path("speck-feat2tech.md"),
-                "--temperature",
-                "0.7",
                 "--no-session",
             ],
             &msg,
