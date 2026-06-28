@@ -13,6 +13,20 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         return Err("Speck.toml already exists. This project is already initialized.".into());
     }
 
+    // Copy prompts before any zerostack call: Steps 1 and 2 load these via
+    // `--load-prompt`, and zerostack hard-fails on an unknown prompt.
+    std::fs::create_dir_all(project_dir.join(".zerostack/prompts"))?;
+    let prompts: &[(&str, &str)] = &[
+        ("speck-feat2tech.md", include_str!("../../data/prompts/speck-feat2tech.md")),
+        ("speck-tech2code.md", include_str!("../../data/prompts/speck-tech2code.md")),
+        ("speck-code2tech.md", include_str!("../../data/prompts/speck-code2tech.md")),
+        ("speck-tech2feat.md", include_str!("../../data/prompts/speck-tech2feat.md")),
+        ("speck-review.md", include_str!("../../data/prompts/speck-review.md")),
+    ];
+    for (name, content) in prompts {
+        std::fs::write(project_dir.join(".zerostack/prompts").join(name), content)?;
+    }
+
     // Step 1: Generate specs/technical from source code
     eprintln!("Step 1/4: Generating specs/technical from source code...");
     let src_dir = detect_source_dir(&project_dir);
@@ -112,19 +126,6 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
         project_dir.join("specs/TECH_STACK.md"),
         "## Tech Stack\n\n_Describe your tech stack here_\n",
     )?;
-
-    // Copy prompts
-    std::fs::create_dir_all(project_dir.join(".zerostack/prompts"))?;
-    let prompts: &[(&str, &str)] = &[
-        ("speck-feat2tech.md", include_str!("../../data/prompts/speck-feat2tech.md")),
-        ("speck-tech2code.md", include_str!("../../data/prompts/speck-tech2code.md")),
-        ("speck-code2tech.md", include_str!("../../data/prompts/speck-code2tech.md")),
-        ("speck-tech2feat.md", include_str!("../../data/prompts/speck-tech2feat.md")),
-        ("speck-review.md", include_str!("../../data/prompts/speck-review.md")),
-    ];
-    for (name, content) in prompts {
-        std::fs::write(project_dir.join(".zerostack/prompts").join(name), content)?;
-    }
 
     // Step 4: Ask user to review specs/features
     eprintln!("Step 4/4: Review time!");
