@@ -30,7 +30,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     zerostack::run_p(
         &[
             "--load-prompt",
-            &zerostack::prompt_path("speck-code2tech.md"),
+            &zerostack::prompt_name("speck-code2tech.md"),
             "--temperature",
             "0",
             "--no-session",
@@ -51,7 +51,7 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     zerostack::run_p(
         &[
             "--load-prompt",
-            &zerostack::prompt_path("speck-tech2feat.md"),
+            &zerostack::prompt_name("speck-tech2feat.md"),
             "--no-session",
         ],
         &msg2,

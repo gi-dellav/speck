@@ -11,11 +11,11 @@ pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let config = SpeckConfig::from_file(&config_path)?;
     let model = config.model.as_deref();
 
-    let prompt_path = zerostack::prompt_path("speck-review.md");
+    let prompt_name = zerostack::prompt_name("speck-review.md");
     if let Some(output_path) = output {
         let result = zerostack::run(&[
             "--load-prompt",
-            &prompt_path,
+            &prompt_name,
             "--no-session",
             "--temperature",
             "0",
@@ -25,7 +25,7 @@ pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let result = zerostack::run(&[
             "--load-prompt",
-            &prompt_path,
+            &prompt_name,
             "--pure-stdout",
             "--no-session",
             "--temperature",

@@ -33,8 +33,13 @@ pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn prompt_path(name: &str) -> String {
-    format!(".zerostack/prompts/{}", name)
+/// Returns the prompt name expected by zerostack's `--load-prompt`.
+///
+/// zerostack loads prompts from `.zerostack/prompts/` (among other dirs) and
+/// keys them by file stem, so `--load-prompt` wants the bare name without the
+/// directory prefix or the `.md` extension (e.g. `speck-code2tech`).
+pub fn prompt_name(name: &str) -> String {
+    name.strip_suffix(".md").unwrap_or(name).to_string()
 }
 
 #[cfg(test)]
@@ -42,8 +47,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_prompt_path() {
-        assert_eq!(prompt_path("speck-code2tech.md"), ".zerostack/prompts/speck-code2tech.md");
-        assert_eq!(prompt_path("speck-review"), ".zerostack/prompts/speck-review");
+    fn test_prompt_name() {
+        assert_eq!(prompt_name("speck-code2tech.md"), "speck-code2tech");
+        assert_eq!(prompt_name("speck-review"), "speck-review");
     }
 }

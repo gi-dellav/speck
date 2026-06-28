@@ -93,7 +93,7 @@ pub fn run(
         zerostack::run_p(
             &[
                 "--load-prompt",
-                &zerostack::prompt_path("speck-code2tech.md"),
+                &zerostack::prompt_name("speck-code2tech.md"),
                 "--temperature",
                 "0",
                 "--no-session",
@@ -119,7 +119,7 @@ pub fn run(
         zerostack::run_p(
             &[
                 "--load-prompt",
-                &zerostack::prompt_path("speck-tech2feat.md"),
+                &zerostack::prompt_name("speck-tech2feat.md"),
                 "--temperature",
                 "0",
                 "--no-session",
@@ -145,7 +145,7 @@ pub fn run(
         zerostack::run_p(
             &[
                 "--load-prompt",
-                &zerostack::prompt_path("speck-feat2tech.md"),
+                &zerostack::prompt_name("speck-feat2tech.md"),
                 "--temperature",
                 "0.7",
                 "--no-session",
@@ -173,10 +173,10 @@ pub fn run(
             ),
             &custom,
         );
-        let prompt_path = zerostack::prompt_path("speck-tech2code.md");
+        let prompt_name = zerostack::prompt_name("speck-tech2code.md");
         let mut args: Vec<&str> = vec![
             "--load-prompt",
-            &prompt_path,
+            &prompt_name,
             "--no-session",
         ];
         let temp_str;
