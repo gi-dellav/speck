@@ -1,6 +1,6 @@
 [package]
 name = "speck"
-version = "1.0.0-rc1"
+version = "1.0.0-rc2"
 edition = "2024"
 authors = ["Giuseppe Della Vedova"]
 description = "Spec-driven agentic compiler, built on top of zerostack"
