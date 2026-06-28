@@ -5,14 +5,21 @@ pub fn run(args: &[&str], model: Option<&str>) -> Result<String, Box<dyn std::er
     if let Some(m) = model {
         cmd.arg("--quick-model").arg(m);
     }
+    // These calls run zerostack non-interactively in print mode:
+    // - stdin is null so any interactive prompt (e.g. the one-time
+    //   "Create ARCHITECTURE.md? [y/N]" question) reads EOF and proceeds
+    //   instead of blocking forever.
+    // - stdout is captured and returned to the caller.
+    // - stderr is inherited so the user sees live agent progress; because of
+    //   that it is not captured, so errors surface on the terminal directly.
     let output = cmd
         .args(args)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .output()?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("zerostack failed: {}", stderr).into());
+        return Err(format!("zerostack {} (see output above)", output.status).into());
     }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
