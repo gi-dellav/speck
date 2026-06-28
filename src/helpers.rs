@@ -131,12 +131,88 @@ pub fn ensure_not_gitignored(project_dir: &Path) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+/// Resolves `path` (relative or absolute, possibly reached through symlinks)
+/// into a project-relative key suitable for the hash maps.
+///
+/// A naive `path.strip_prefix(current_dir())` is fragile: on some platforms
+/// `current_dir()` is canonicalized (e.g. macOS resolves `/tmp` ->
+/// `/private/tmp`), so it fails to match a path the caller passed in
+/// un-canonicalized form, or a relative path. This canonicalizes both sides
+/// first. It canonicalizes the parent directory and re-attaches the file name
+/// rather than the path itself, so it still works when the target has just
+/// been deleted (`speck rm`) or moved (`speck mv`).
+pub fn project_relative(
+    path: &Path,
+    project_dir: &Path,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        project_dir.join(path)
+    };
+
+    let canonical = match (abs.parent(), abs.file_name()) {
+        (Some(parent), Some(name)) => parent.canonicalize()?.join(name),
+        _ => abs.canonicalize()?,
+    };
+
+    let project_canonical = project_dir.canonicalize()?;
+    let rel = canonical
+        .strip_prefix(&project_canonical)
+        .map_err(|_| format!("path {} is outside the project directory", path.display()))?;
+    Ok(rel.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn with_cwd_locked<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
         crate::test_utils::with_cwd_locked(dir, f)
+    }
+
+    #[test]
+    fn test_project_relative_absolute_and_relative() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_relctx_test_{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("src/foo.rs"), "fn foo() {}").unwrap();
+        // current_dir() may canonicalize symlinks (e.g. /tmp -> /private/tmp);
+        // project_relative must still produce the same key for an absolute path
+        // passed in un-canonicalized form and for a relative path.
+        let project = std::fs::canonicalize(&dir).unwrap();
+        let abs = dir.join("src/foo.rs");
+        assert_eq!(project_relative(&abs, &project).unwrap(), "src/foo.rs");
+        assert_eq!(
+            project_relative(Path::new("src/foo.rs"), &project).unwrap(),
+            "src/foo.rs"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_project_relative_works_after_deletion() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_reldel_test_{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        let project = std::fs::canonicalize(&dir).unwrap();
+        let file = dir.join("src/gone.rs");
+        std::fs::write(&file, "x").unwrap();
+        std::fs::remove_file(&file).unwrap();
+        // Parent still exists, so the key resolves even though the file is gone.
+        assert_eq!(project_relative(&file, &project).unwrap(), "src/gone.rs");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_project_relative_outside_project_errors() {
+        let dir = std::env::temp_dir()
+            .join(format!("speck_relout_test_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let project = std::fs::canonicalize(&dir).unwrap();
+        let result = project_relative(Path::new("/etc/hosts"), &project);
+        assert!(result.is_err());
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
