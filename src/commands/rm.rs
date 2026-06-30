@@ -2,7 +2,7 @@ use crate::hashes::SpeckHashes;
 use crate::helpers;
 use std::path::Path;
 
-pub fn run(path: String) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(path: String, always_yes: bool, always_no: bool) -> Result<(), Box<dyn std::error::Error>> {
     let project_dir = std::env::current_dir()?;
     let hash_path = project_dir.join(".speck_hash.toml");
 
@@ -14,6 +14,17 @@ pub fn run(path: String) -> Result<(), Box<dyn std::error::Error>> {
 
     if !target.exists() {
         return Err(format!("File not found: {}", path).into());
+    }
+
+    let proceed = helpers::confirm(
+        always_yes,
+        always_no,
+        &format!("Remove '{}'? This cannot be undone.", path),
+        false,
+    )?;
+    if !proceed {
+        println!("Aborted.");
+        return Ok(());
     }
 
     if target.is_dir() {
@@ -63,9 +74,9 @@ mod tests {
         cleanup_temp_dir(&dir);
     }
 
-    fn run_rm_in_dir(dir: &std::path::Path, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn run_rm_in_dir(dir: &std::path::Path, path: &str, always_yes: bool, always_no: bool) -> Result<(), Box<dyn std::error::Error>> {
         let p = path.to_string();
-        crate::test_utils::with_cwd_locked(dir, || super::run(p))
+        crate::test_utils::with_cwd_locked(dir, || super::run(p, always_yes, always_no))
     }
 
     #[test]
@@ -80,7 +91,7 @@ mod tests {
         hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
 
         let abs_path = dir.join("src/to_remove.rs");
-        run_rm_in_dir(&dir, abs_path.to_str().unwrap()).unwrap();
+        run_rm_in_dir(&dir, abs_path.to_str().unwrap(), true, false).unwrap();
 
         assert!(!file.exists());
         let loaded = SpeckHashes::from_file(&dir.join(".speck_hash.toml")).unwrap();
@@ -100,7 +111,7 @@ mod tests {
         hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
 
         let abs_path = dir.join("specs/features/old_feature");
-        run_rm_in_dir(&dir, abs_path.to_str().unwrap()).unwrap();
+        run_rm_in_dir(&dir, abs_path.to_str().unwrap(), true, false).unwrap();
 
         assert!(!subdir.exists());
         let loaded = SpeckHashes::from_file(&dir.join(".speck_hash.toml")).unwrap();

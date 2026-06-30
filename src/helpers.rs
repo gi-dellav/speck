@@ -163,6 +163,25 @@ pub fn project_relative(
     Ok(rel.to_string_lossy().to_string())
 }
 
+pub fn confirm(
+    always_yes: bool,
+    always_no: bool,
+    prompt: &str,
+    default: bool,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    if always_yes {
+        return Ok(true);
+    }
+    if always_no {
+        return Ok(false);
+    }
+    dialoguer::Confirm::new()
+        .with_prompt(prompt)
+        .default(default)
+        .interact()
+        .map_err(|e| e.into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

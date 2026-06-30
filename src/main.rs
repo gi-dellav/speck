@@ -35,19 +35,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::force_update::run()
         }
         cli::Command::Reset { hard, rebuild, full } => {
-            commands::reset::run(hard, rebuild, full)
+            commands::reset::run(hard, rebuild, full, cli.always_yes, cli.always_no)
         }
         cli::Command::Status => {
             commands::status::run()
         }
-        cli::Command::SwitchLang { safe } => {
-            commands::switch_lang::run(safe)
+        cli::Command::SwitchLang { keep_all_specs } => {
+            commands::switch_lang::run(keep_all_specs, cli.always_yes, cli.always_no)
         }
         cli::Command::Mv { source, dest } => {
             commands::mv::run(source, dest)
         }
         cli::Command::Rm { path } => {
-            commands::rm::run(path)
+            commands::rm::run(path, cli.always_yes, cli.always_no)
         }
         cli::Command::GitHooks => {
             commands::git_hooks::run()

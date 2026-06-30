@@ -3,6 +3,12 @@ use clap::{Parser, Subcommand};
 #[derive(Parser)]
 #[command(name = "speck", version, about = "A fully spec-based AI agentic compiler")]
 pub struct Cli {
+    /// Answer yes to all confirmation prompts
+    #[arg(long = "always-yes", short = 'y', global = true, conflicts_with = "always_no")]
+    pub always_yes: bool,
+    /// Answer no to all confirmation prompts
+    #[arg(long = "always-no", short = 'n', global = true, conflicts_with = "always_yes")]
+    pub always_no: bool,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -79,9 +85,9 @@ pub enum Command {
     Status,
     /// Change the tech stack of the current project
     SwitchLang {
-        /// Keep specs/technical/ (skip full reset — only hard + rebuild)
-        #[arg(long)]
-        safe: bool,
+        /// Keep all specs (skip full reset — only hard + rebuild)
+        #[arg(long = "keep-all-specs")]
+        keep_all_specs: bool,
     },
     /// Move a file and update .speck_hash.toml
     Mv {
