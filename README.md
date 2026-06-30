@@ -25,7 +25,7 @@ Spec-driven agentic compiler — keep features, technical specs, and code in syn
 ### Cargo
 
 ```bash
-cargo install --path .
+cargo install speck-dev --version 1.0.0-rc3
 ```
 
 ### From source
@@ -33,7 +33,7 @@ cargo install --path .
 ```bash
 git clone https://github.com/gi-dellav/speck.git
 cd speck
-cargo build --release
+cargo install --path .
 ```
 
 ## Quick start
