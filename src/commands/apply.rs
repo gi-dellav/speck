@@ -51,30 +51,41 @@ pub fn run(
         return Ok(());
     }
 
-    // Conflict detection
+    // Conflict detection: when a source file and its tech counterpart are both
+    // edited, the user (or flags) decides which side is authoritative.
     let conflicts = detect_conflicts(&all_edited_src, &all_edited_tech, &config.source_dir);
-    let resolved_src = if !conflicts.is_empty() {
+    let conflict_src_set: std::collections::HashSet<&str> =
+        conflicts.iter().map(|(s, _)| s.as_str()).collect();
+    let conflict_tech_set: std::collections::HashSet<&str> =
+        conflicts.iter().map(|(_, t)| t.as_str()).collect();
+
+    // kept_src: conflict source files the user chose to keep (code wins)
+    let kept_src: std::collections::HashSet<String> = if !conflicts.is_empty() {
         resolve_conflicts(&conflicts, prefer_code, prefer_specs)?
-    } else {
-        all_edited_src.clone()
-    };
-    let resolved_tech = if !conflicts.is_empty() {
-        let conflict_tech: Vec<String> = conflicts.iter().map(|(_, tech)| tech.clone()).collect();
-        let keep_code: Vec<String> = resolved_src.iter()
-            .filter(|s| conflicts.iter().any(|(src, _)| src == *s))
-            .cloned()
-            .collect();
-        all_edited_tech
-            .iter()
-            .filter(|t| !conflict_tech.contains(t) || !keep_code.iter().any(|s| {
-                let counterpart = src_to_tech_counterpart(s, &config.source_dir);
-                counterpart.as_deref() == Some(t.as_str())
-            }))
-            .cloned()
+            .into_iter()
             .collect()
     } else {
-        all_edited_tech.clone()
+        std::collections::HashSet::new()
     };
+
+    // resolved_src: non-conflict src + conflict src where code won
+    let resolved_src: Vec<String> = all_edited_src
+        .iter()
+        .filter(|s| !conflict_src_set.contains(s.as_str()) || kept_src.contains(*s))
+        .cloned()
+        .collect();
+
+    // resolved_tech: non-conflict tech + conflict tech where specs won
+    let resolved_tech: Vec<String> = all_edited_tech
+        .iter()
+        .filter(|t| {
+            !conflict_tech_set.contains(t.as_str())
+                || !kept_src.iter().any(|s| {
+                    src_to_tech_counterpart(s, &config.source_dir).as_deref() == Some(t.as_str())
+                })
+        })
+        .cloned()
+        .collect();
 
     let run_inverse = !only_direct;
     let run_direct = !only_inverse;
@@ -146,8 +157,6 @@ pub fn run(
             &[
                 "--load-prompt",
                 &zerostack::prompt_name("speck-feat2tech.md"),
-                "--temperature",
-                "0.7",
                 "--no-session",
             ],
             &msg,
@@ -367,5 +376,108 @@ mod tests {
         ];
         let result = resolve_conflicts(&conflicts, true, true);
         assert!(result.is_err());
+    }
+
+    // ── integration-level conflict resolution tests ──
+
+    fn apply_conflict_resolution(
+        all_edited_src: &[String],
+        all_edited_tech: &[String],
+        conflicts: &[(String, String)],
+        kept_src: &std::collections::HashSet<String>,
+        source_dir: &str,
+    ) -> (Vec<String>, Vec<String>) {
+        let conflict_src_set: std::collections::HashSet<&str> =
+            conflicts.iter().map(|(s, _)| s.as_str()).collect();
+        let conflict_tech_set: std::collections::HashSet<&str> =
+            conflicts.iter().map(|(_, t)| t.as_str()).collect();
+
+        let resolved_src: Vec<String> = all_edited_src
+            .iter()
+            .filter(|s| !conflict_src_set.contains(s.as_str()) || kept_src.contains(*s))
+            .cloned()
+            .collect();
+
+        let resolved_tech: Vec<String> = all_edited_tech
+            .iter()
+            .filter(|t| {
+                !conflict_tech_set.contains(t.as_str())
+                    || !kept_src.iter().any(|s| {
+                        src_to_tech_counterpart(s, source_dir).as_deref() == Some(t.as_str())
+                    })
+            })
+            .cloned()
+            .collect();
+
+        (resolved_src, resolved_tech)
+    }
+
+    #[test]
+    fn test_conflict_resolution_no_conflicts_passthrough() {
+        let src = vec!["src/a.rs".to_string(), "src/b.rs".to_string()];
+        let tech = vec!["specs/technical/c.rs".to_string()];
+        let conflicts = vec![];
+        let kept = std::collections::HashSet::new();
+        let (resolved_src, resolved_tech) =
+            apply_conflict_resolution(&src, &tech, &conflicts, &kept, "src");
+        assert_eq!(resolved_src, src);
+        assert_eq!(resolved_tech, tech);
+    }
+
+    #[test]
+    fn test_conflict_resolution_prefer_code_preserves_non_conflict_src() {
+        // src/a.rs conflicts with tech/a.rs; src/b.rs has no conflict
+        let src = vec!["src/a.rs".to_string(), "src/b.rs".to_string()];
+        let tech = vec!["specs/technical/a.rs".to_string()];
+        let conflicts = vec![("src/a.rs".to_string(), "specs/technical/a.rs".to_string())];
+        let kept: std::collections::HashSet<String> =
+            ["src/a.rs".to_string()].into_iter().collect(); // user chose code
+
+        let (resolved_src, resolved_tech) =
+            apply_conflict_resolution(&src, &tech, &conflicts, &kept, "src");
+        // Both src files present; conflict tech dropped
+        assert_eq!(resolved_src, vec!["src/a.rs", "src/b.rs"]);
+        assert!(resolved_tech.is_empty());
+    }
+
+    #[test]
+    fn test_conflict_resolution_prefer_specs_keeps_non_conflict_src() {
+        // src/a.rs conflicts with tech/a.rs; src/b.rs has no conflict
+        let src = vec!["src/a.rs".to_string(), "src/b.rs".to_string()];
+        let tech = vec!["specs/technical/a.rs".to_string()];
+        let conflicts = vec![("src/a.rs".to_string(), "specs/technical/a.rs".to_string())];
+        let kept: std::collections::HashSet<String> = std::collections::HashSet::new(); // user chose specs
+
+        let (resolved_src, resolved_tech) =
+            apply_conflict_resolution(&src, &tech, &conflicts, &kept, "src");
+        // Non-conflict src/b.rs preserved; conflict src/a.rs dropped; tech kept
+        assert_eq!(resolved_src, vec!["src/b.rs"]);
+        assert_eq!(resolved_tech, tech);
+    }
+
+    #[test]
+    fn test_conflict_resolution_mixed_conflicts_and_non_conflicts() {
+        let src = vec![
+            "src/conflict1.rs".to_string(),
+            "src/nonconflict.rs".to_string(),
+        ];
+        let tech = vec![
+            "specs/technical/conflict1.rs".to_string(),
+            "specs/technical/nonconflict_tech.rs".to_string(),
+        ];
+        let conflicts = vec![(
+            "src/conflict1.rs".to_string(),
+            "specs/technical/conflict1.rs".to_string(),
+        )];
+        let kept: std::collections::HashSet<String> =
+            ["src/conflict1.rs".to_string()].into_iter().collect(); // code wins
+
+        let (resolved_src, resolved_tech) =
+            apply_conflict_resolution(&src, &tech, &conflicts, &kept, "src");
+        // All src preserved; conflict tech dropped, non-conflict tech kept
+        assert_eq!(resolved_src.len(), 2);
+        assert!(resolved_src.contains(&"src/conflict1.rs".to_string()));
+        assert!(resolved_src.contains(&"src/nonconflict.rs".to_string()));
+        assert_eq!(resolved_tech, vec!["specs/technical/nonconflict_tech.rs"]);
     }
 }
