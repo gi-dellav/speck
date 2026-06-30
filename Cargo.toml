@@ -1,5 +1,5 @@
 [package]
-name = "speck"
+name = "speck-dev"
 version = "1.0.0-rc2"
 edition = "2024"
 authors = ["Giuseppe Della Vedova"]
