@@ -13,6 +13,8 @@ pub fn run(
     prefer_code: bool,
     prefer_specs: bool,
     gen_temperature: Option<f64>,
+    always_yes: bool,
+    always_no: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let project_dir = std::env::current_dir()?;
     let config_path = project_dir.join("Speck.toml");
@@ -61,7 +63,7 @@ pub fn run(
 
     // kept_src: conflict source files the user chose to keep (code wins)
     let kept_src: std::collections::HashSet<String> = if !conflicts.is_empty() {
-        resolve_conflicts(&conflicts, prefer_code, prefer_specs)?
+        resolve_conflicts(&conflicts, prefer_code, prefer_specs, always_yes, always_no)?
             .into_iter()
             .collect()
     } else {
@@ -113,7 +115,6 @@ pub fn run(
             config.model.as_deref(),
         )
         .map_err(|e| format!("Step 1/4 (code → specs/technical) failed: {}", e))?;
-        save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
     }
 
     // Step 2: specs/technical → specs/features (only with --update-features)
@@ -139,7 +140,6 @@ pub fn run(
             config.model.as_deref(),
         )
         .map_err(|e| format!("Step 2/4 (specs/technical → specs/features) failed: {}", e))?;
-        save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
     }
 
     // Step 3: specs/features → specs/technical
@@ -163,7 +163,6 @@ pub fn run(
             config.model.as_deref(),
         )
         .map_err(|e| format!("Step 3/4 (specs/features → specs/technical) failed: {}", e))?;
-        save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
     }
 
     // Step 4: specs/technical + specs/features → source code
@@ -199,7 +198,7 @@ pub fn run(
     }
 
     // Final hash save
-    save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore)?;
+    save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore, &stored_hashes)?;
 
     println!("Apply complete.");
     Ok(())
@@ -211,6 +210,7 @@ fn save_hashes(
     technical_path: &Path,
     src_path: &Path,
     gitignore: &ignore::gitignore::Gitignore,
+    old_hashes: &SpeckHashes,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut hashes = SpeckHashes::default();
     if features_path.exists() {
@@ -222,8 +222,19 @@ fn save_hashes(
     if src_path.exists() {
         helpers::collect_hashes(src_path, &mut hashes.src_hash, gitignore)?;
     }
+    warn_disappeared("features", &old_hashes.features_hash, &hashes.features_hash);
+    warn_disappeared("technical", &old_hashes.technical_hash, &hashes.technical_hash);
+    warn_disappeared("src", &old_hashes.src_hash, &hashes.src_hash);
     hashes.to_file(hash_path)?;
     Ok(())
+}
+
+fn warn_disappeared(category: &str, old: &std::collections::BTreeMap<String, String>, new: &std::collections::BTreeMap<String, String>) {
+    for key in old.keys() {
+        if !new.contains_key(key) {
+            eprintln!("Warning: {} file '{}' is no longer present and has been removed from tracking.", category, key);
+        }
+    }
 }
 
 fn build_message(intro: &str, detail: &str, custom: &Option<String>) -> String {
@@ -261,14 +272,16 @@ fn resolve_conflicts(
     conflicts: &[(String, String)],
     prefer_code: bool,
     prefer_specs: bool,
+    always_yes: bool,
+    always_no: bool,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     if prefer_code && prefer_specs {
         return Err("Cannot use both --prefer-code and --prefer-specs".into());
     }
-    if prefer_code {
+    if prefer_code || always_yes {
         return Ok(conflicts.iter().map(|(s, _)| s.clone()).collect());
     }
-    if prefer_specs {
+    if prefer_specs || always_no {
         return Ok(Vec::new());
     }
 
@@ -356,7 +369,7 @@ mod tests {
         let conflicts = vec![
             ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
         ];
-        let result = resolve_conflicts(&conflicts, true, false).unwrap();
+        let result = resolve_conflicts(&conflicts, true, false, false, false).unwrap();
         assert_eq!(result, vec!["src/main.rs"]);
     }
 
@@ -365,7 +378,7 @@ mod tests {
         let conflicts = vec![
             ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
         ];
-        let result = resolve_conflicts(&conflicts, false, true).unwrap();
+        let result = resolve_conflicts(&conflicts, false, true, false, false).unwrap();
         assert!(result.is_empty());
     }
 
@@ -374,8 +387,26 @@ mod tests {
         let conflicts = vec![
             ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
         ];
-        let result = resolve_conflicts(&conflicts, true, true);
+        let result = resolve_conflicts(&conflicts, true, true, false, false);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_conflicts_always_yes_keeps_code() {
+        let conflicts = vec![
+            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
+        ];
+        let result = resolve_conflicts(&conflicts, false, false, true, false).unwrap();
+        assert_eq!(result, vec!["src/main.rs"]);
+    }
+
+    #[test]
+    fn test_resolve_conflicts_always_no_keeps_specs() {
+        let conflicts = vec![
+            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
+        ];
+        let result = resolve_conflicts(&conflicts, false, false, false, true).unwrap();
+        assert!(result.is_empty());
     }
 
     // ── integration-level conflict resolution tests ──

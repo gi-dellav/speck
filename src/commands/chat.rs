@@ -11,5 +11,5 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     zerostack::run_tui()?;
 
     println!("\nUpdating project files with speck apply...");
-    crate::commands::apply::run(None, false, false, false, false, false, None)
+    crate::commands::apply::run(None, false, false, false, false, false, None, false, false)
 }

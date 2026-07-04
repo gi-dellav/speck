@@ -56,7 +56,7 @@ pub fn run(hard: bool, rebuild: bool, full: bool, always_yes: bool, always_no: b
 
     if rebuild {
         println!("Running speck apply to rebuild...");
-        crate::commands::apply::run(None, false, false, false, false, false, None)?;
+        crate::commands::apply::run(None, false, false, false, false, false, None, always_yes, always_no)?;
     }
 
     Ok(())

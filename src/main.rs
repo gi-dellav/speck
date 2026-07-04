@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::review::run(output)
         }
         cli::Command::Apply { custom, only_direct, only_inverse, update_features, prefer_code, prefer_specs, gen_temperature } => {
-            commands::apply::run(custom, only_direct, only_inverse, update_features, prefer_code, prefer_specs, gen_temperature)
+            commands::apply::run(custom, only_direct, only_inverse, update_features, prefer_code, prefer_specs, gen_temperature, cli.always_yes, cli.always_no)
         }
         cli::Command::Fmt => {
             commands::fmt::run()
