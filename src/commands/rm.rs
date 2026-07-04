@@ -68,9 +68,9 @@ mod tests {
         let hash_path = dir.join(".speck_hash.toml");
         let hashes = SpeckHashes::default();
         hashes.to_file(&hash_path).unwrap();
-        std::fs::write(&dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
-        let nonexistent = dir.join("nonexistent.txt");
-        assert!(!nonexistent.exists());
+        let result = run_rm_in_dir(&dir, "nonexistent.txt", true, false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("File not found"));
         cleanup_temp_dir(&dir);
     }
 

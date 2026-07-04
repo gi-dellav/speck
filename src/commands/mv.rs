@@ -83,8 +83,13 @@ mod tests {
         fs::write(&dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
         fs::write(&dir.join("a.txt"), "a").unwrap();
         fs::write(&dir.join("b.txt"), "b").unwrap();
-        let dst = dir.join("b.txt");
-        assert!(dst.exists());
+        let result = run_mv_in_dir(
+            &dir,
+            dir.join("a.txt").to_str().unwrap(),
+            dir.join("b.txt").to_str().unwrap(),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Destination already exists"));
         cleanup_temp_dir(&dir);
     }
 

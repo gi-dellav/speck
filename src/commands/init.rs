@@ -126,13 +126,21 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    fn run_init_in_dir(dir: &std::path::Path, name: &str, source_path: &str, skip_git: bool) -> Result<(), Box<dyn std::error::Error>> {
+        crate::test_utils::with_cwd_locked(dir, || {
+            super::run(Some(name.to_string()), Some(source_path.to_string()), skip_git)
+        })
+    }
+
     #[test]
     fn test_init_creates_directories() {
         let dir = setup_temp_dir();
-        std::fs::create_dir_all(dir.join("specs/features")).unwrap();
-        std::fs::create_dir_all(dir.join("specs/technical")).unwrap();
+        run_init_in_dir(&dir, "test", "src", true).unwrap();
         assert!(dir.join("specs/features").exists());
         assert!(dir.join("specs/technical").exists());
+        assert!(dir.join(".zerostack/prompts").exists());
+        assert!(dir.join("Speck.toml").exists());
+        assert!(dir.join(".speck_hash.toml").exists());
         cleanup_temp_dir(&dir);
     }
 
