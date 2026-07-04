@@ -2,7 +2,11 @@ use crate::hashes::SpeckHashes;
 use crate::helpers;
 use std::path::Path;
 
-pub fn run(path: String, always_yes: bool, always_no: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    path: String,
+    always_yes: bool,
+    always_no: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let project_dir = std::env::current_dir()?;
     let hash_path = project_dir.join(".speck_hash.toml");
 
@@ -74,7 +78,12 @@ mod tests {
         cleanup_temp_dir(&dir);
     }
 
-    fn run_rm_in_dir(dir: &std::path::Path, path: &str, always_yes: bool, always_no: bool) -> Result<(), Box<dyn std::error::Error>> {
+    fn run_rm_in_dir(
+        dir: &std::path::Path,
+        path: &str,
+        always_yes: bool,
+        always_no: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let p = path.to_string();
         crate::test_utils::with_cwd_locked(dir, || super::run(p, always_yes, always_no))
     }
@@ -87,7 +96,9 @@ mod tests {
         let file = src_dir.join("to_remove.rs");
         std::fs::write(&file, "fn unused() {}").unwrap();
         let mut hashes = SpeckHashes::default();
-        hashes.src_hash.insert("src/to_remove.rs".to_string(), "somehash".to_string());
+        hashes
+            .src_hash
+            .insert("src/to_remove.rs".to_string(), "somehash".to_string());
         hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
 
         let abs_path = dir.join("src/to_remove.rs");
@@ -107,7 +118,10 @@ mod tests {
         std::fs::create_dir_all(&subdir).unwrap();
         std::fs::write(subdir.join("spec.md"), "# Old").unwrap();
         let mut hashes = SpeckHashes::default();
-        hashes.features_hash.insert("specs/features/old_feature".to_string(), "hash1".to_string());
+        hashes.features_hash.insert(
+            "specs/features/old_feature".to_string(),
+            "hash1".to_string(),
+        );
         hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
 
         let abs_path = dir.join("specs/features/old_feature");
@@ -115,7 +129,11 @@ mod tests {
 
         assert!(!subdir.exists());
         let loaded = SpeckHashes::from_file(&dir.join(".speck_hash.toml")).unwrap();
-        assert!(!loaded.features_hash.contains_key("specs/features/old_feature"));
+        assert!(
+            !loaded
+                .features_hash
+                .contains_key("specs/features/old_feature")
+        );
 
         cleanup_temp_dir(&dir);
     }

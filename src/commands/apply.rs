@@ -13,6 +13,8 @@ pub fn run(
     prefer_code: bool,
     prefer_specs: bool,
     gen_temperature: Option<f64>,
+    plan_model: Option<String>,
+    code_model: Option<String>,
     always_yes: bool,
     always_no: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -28,6 +30,14 @@ pub fn run(
     }
 
     let config = SpeckConfig::from_file(&config_path)?;
+    let plan_model = plan_model
+        .as_deref()
+        .or(config.plan_model.as_deref())
+        .or(config.model.as_deref());
+    let code_model = code_model
+        .as_deref()
+        .or(config.code_model.as_deref())
+        .or(config.model.as_deref());
     let stored_hashes = SpeckHashes::from_file(&hash_path)?;
 
     let features_path = PathBuf::from(config.features_path());
@@ -45,8 +55,16 @@ pub fn run(
         helpers::scan_directory(&features_path, &stored_hashes.features_hash, &gitignore)?;
 
     let all_edited_src: Vec<String> = edited_src.iter().chain(unreg_src.iter()).cloned().collect();
-    let all_edited_tech: Vec<String> = edited_tech.iter().chain(unreg_tech.iter()).cloned().collect();
-    let all_edited_feat: Vec<String> = edited_feat.iter().chain(unreg_feat.iter()).cloned().collect();
+    let all_edited_tech: Vec<String> = edited_tech
+        .iter()
+        .chain(unreg_tech.iter())
+        .cloned()
+        .collect();
+    let all_edited_feat: Vec<String> = edited_feat
+        .iter()
+        .chain(unreg_feat.iter())
+        .cloned()
+        .collect();
 
     if all_edited_src.is_empty() && all_edited_tech.is_empty() && all_edited_feat.is_empty() {
         println!("there's nothing to do");
@@ -112,7 +130,7 @@ pub fn run(
                 "--no-session",
             ],
             &msg,
-            config.model.as_deref(),
+            plan_model,
         )
         .map_err(|e| format!("Step 1/4 (code → specs/technical) failed: {}", e))?;
     }
@@ -137,7 +155,7 @@ pub fn run(
                 "--no-session",
             ],
             &msg,
-            config.model.as_deref(),
+            plan_model,
         )
         .map_err(|e| format!("Step 2/4 (specs/technical → specs/features) failed: {}", e))?;
     }
@@ -160,7 +178,7 @@ pub fn run(
                 "--no-session",
             ],
             &msg,
-            config.model.as_deref(),
+            plan_model,
         )
         .map_err(|e| format!("Step 3/4 (specs/features → specs/technical) failed: {}", e))?;
     }
@@ -182,23 +200,26 @@ pub fn run(
             &custom,
         );
         let prompt_name = zerostack::prompt_name("speck-tech2code.md");
-        let mut args: Vec<&str> = vec![
-            "--load-prompt",
-            &prompt_name,
-            "--no-session",
-        ];
+        let mut args: Vec<&str> = vec!["--load-prompt", &prompt_name, "--no-session"];
         let temp_str;
         if let Some(t) = gen_temperature {
             temp_str = t.to_string();
             args.push("--temperature");
             args.push(&temp_str);
         }
-        zerostack::run_p_streamed(&args, &msg, config.model.as_deref())
+        zerostack::run_p_streamed(&args, &msg, code_model)
             .map_err(|e| format!("Step 4/4 (specifications → source code) failed: {}", e))?;
     }
 
     // Final hash save
-    save_hashes(&hash_path, &features_path, &technical_path, &src_path, &gitignore, &stored_hashes)?;
+    save_hashes(
+        &hash_path,
+        &features_path,
+        &technical_path,
+        &src_path,
+        &gitignore,
+        &stored_hashes,
+    )?;
 
     println!("Apply complete.");
     Ok(())
@@ -223,16 +244,27 @@ fn save_hashes(
         helpers::collect_hashes(src_path, &mut hashes.src_hash, gitignore)?;
     }
     warn_disappeared("features", &old_hashes.features_hash, &hashes.features_hash);
-    warn_disappeared("technical", &old_hashes.technical_hash, &hashes.technical_hash);
+    warn_disappeared(
+        "technical",
+        &old_hashes.technical_hash,
+        &hashes.technical_hash,
+    );
     warn_disappeared("src", &old_hashes.src_hash, &hashes.src_hash);
     hashes.to_file(hash_path)?;
     Ok(())
 }
 
-fn warn_disappeared(category: &str, old: &std::collections::BTreeMap<String, String>, new: &std::collections::BTreeMap<String, String>) {
+fn warn_disappeared(
+    category: &str,
+    old: &std::collections::BTreeMap<String, String>,
+    new: &std::collections::BTreeMap<String, String>,
+) {
     for key in old.keys() {
         if !new.contains_key(key) {
-            eprintln!("Warning: {} file '{}' is no longer present and has been removed from tracking.", category, key);
+            eprintln!(
+                "Warning: {} file '{}' is no longer present and has been removed from tracking.",
+                category, key
+            );
         }
     }
 }
@@ -245,7 +277,11 @@ fn build_message(intro: &str, detail: &str, custom: &Option<String>) -> String {
     msg
 }
 
-fn detect_conflicts(src_files: &[String], tech_files: &[String], source_dir: &str) -> Vec<(String, String)> {
+fn detect_conflicts(
+    src_files: &[String],
+    tech_files: &[String],
+    source_dir: &str,
+) -> Vec<(String, String)> {
     let mut conflicts = Vec::new();
     for sf in src_files {
         if let Some(tf) = src_to_tech_counterpart(sf, source_dir)
@@ -342,11 +378,7 @@ mod tests {
 
     #[test]
     fn test_build_message_with_custom() {
-        let msg = build_message(
-            "Intro",
-            "Details here",
-            &Some("Custom note".to_string()),
-        );
+        let msg = build_message("Intro", "Details here", &Some("Custom note".to_string()));
         assert!(msg.contains("Intro"));
         assert!(msg.contains("Details here"));
         assert!(msg.contains("Custom note"));
@@ -354,11 +386,7 @@ mod tests {
 
     #[test]
     fn test_build_message_without_custom() {
-        let msg = build_message(
-            "Intro",
-            "Details",
-            &None,
-        );
+        let msg = build_message("Intro", "Details", &None);
         assert!(msg.contains("Intro"));
         assert!(msg.contains("Details"));
         assert!(!msg.contains("Additional instructions"));
@@ -366,45 +394,50 @@ mod tests {
 
     #[test]
     fn test_resolve_conflicts_prefer_code() {
-        let conflicts = vec![
-            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
-        ];
+        let conflicts = vec![(
+            "src/main.rs".to_string(),
+            "specs/technical/main.rs".to_string(),
+        )];
         let result = resolve_conflicts(&conflicts, true, false, false, false).unwrap();
         assert_eq!(result, vec!["src/main.rs"]);
     }
 
     #[test]
     fn test_resolve_conflicts_prefer_specs() {
-        let conflicts = vec![
-            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
-        ];
+        let conflicts = vec![(
+            "src/main.rs".to_string(),
+            "specs/technical/main.rs".to_string(),
+        )];
         let result = resolve_conflicts(&conflicts, false, true, false, false).unwrap();
         assert!(result.is_empty());
     }
 
     #[test]
     fn test_resolve_conflicts_both_flags_error() {
-        let conflicts = vec![
-            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
-        ];
+        let conflicts = vec![(
+            "src/main.rs".to_string(),
+            "specs/technical/main.rs".to_string(),
+        )];
         let result = resolve_conflicts(&conflicts, true, true, false, false);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_resolve_conflicts_always_yes_keeps_code() {
-        let conflicts = vec![
-            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
-        ];
+        let conflicts = vec![(
+            "src/main.rs".to_string(),
+            "specs/technical/main.rs".to_string(),
+        )];
         let result = resolve_conflicts(&conflicts, false, false, true, false).unwrap();
         assert_eq!(result, vec!["src/main.rs"]);
     }
 
     #[test]
     fn test_resolve_conflicts_always_no_keeps_specs() {
-        let conflicts = vec![
-            ("src/main.rs".to_string(), "specs/technical/main.rs".to_string()),
-        ];
+        let conflicts = vec![(
+            "src/main.rs".to_string(),
+            "specs/technical/main.rs".to_string(),
+        )];
         let result = resolve_conflicts(&conflicts, false, false, false, true).unwrap();
         assert!(result.is_empty());
     }

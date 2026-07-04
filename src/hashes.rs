@@ -24,8 +24,6 @@ impl SpeckHashes {
         std::fs::write(path, content)?;
         Ok(())
     }
-
-
 }
 
 pub fn compute_hash(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
@@ -39,8 +37,7 @@ mod tests {
 
     #[test]
     fn test_compute_hash_same_content_same_hash() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_hash_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_hash_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let f1 = dir.join("a.txt");
         let f2 = dir.join("b.txt");
@@ -54,8 +51,7 @@ mod tests {
 
     #[test]
     fn test_compute_hash_different_content_different_hash() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_hash_test2_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_hash_test2_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let f1 = dir.join("a.txt");
         let f2 = dir.join("b.txt");
@@ -84,20 +80,34 @@ mod tests {
 
     #[test]
     fn test_speck_hashes_roundtrip() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_hash_rt_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_hash_rt_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let hash_path = dir.join(".speck_hash.toml");
 
         let mut hashes = SpeckHashes::default();
-        hashes.features_hash.insert("specs/features/auth.md".to_string(), "abc123".to_string());
-        hashes.technical_hash.insert("specs/technical/auth.md".to_string(), "def456".to_string());
-        hashes.src_hash.insert("src/main.rs".to_string(), "789xyz".to_string());
+        hashes
+            .features_hash
+            .insert("specs/features/auth.md".to_string(), "abc123".to_string());
+        hashes
+            .technical_hash
+            .insert("specs/technical/auth.md".to_string(), "def456".to_string());
+        hashes
+            .src_hash
+            .insert("src/main.rs".to_string(), "789xyz".to_string());
         hashes.to_file(&hash_path).unwrap();
 
         let loaded = SpeckHashes::from_file(&hash_path).unwrap();
-        assert_eq!(loaded.features_hash.get("specs/features/auth.md").unwrap(), "abc123");
-        assert_eq!(loaded.technical_hash.get("specs/technical/auth.md").unwrap(), "def456");
+        assert_eq!(
+            loaded.features_hash.get("specs/features/auth.md").unwrap(),
+            "abc123"
+        );
+        assert_eq!(
+            loaded
+                .technical_hash
+                .get("specs/technical/auth.md")
+                .unwrap(),
+            "def456"
+        );
         assert_eq!(loaded.src_hash.get("src/main.rs").unwrap(), "789xyz");
 
         std::fs::remove_dir_all(&dir).ok();

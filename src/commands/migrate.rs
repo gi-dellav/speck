@@ -17,11 +17,26 @@ pub fn run(custom: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     // `--load-prompt`, and zerostack hard-fails on an unknown prompt.
     std::fs::create_dir_all(project_dir.join(".zerostack/prompts"))?;
     let prompts: &[(&str, &str)] = &[
-        ("speck-feat2tech.md", include_str!("../../data/prompts/speck-feat2tech.md")),
-        ("speck-tech2code.md", include_str!("../../data/prompts/speck-tech2code.md")),
-        ("speck-code2tech.md", include_str!("../../data/prompts/speck-code2tech.md")),
-        ("speck-tech2feat.md", include_str!("../../data/prompts/speck-tech2feat.md")),
-        ("speck-review.md", include_str!("../../data/prompts/speck-review.md")),
+        (
+            "speck-feat2tech.md",
+            include_str!("../../data/prompts/speck-feat2tech.md"),
+        ),
+        (
+            "speck-tech2code.md",
+            include_str!("../../data/prompts/speck-tech2code.md"),
+        ),
+        (
+            "speck-code2tech.md",
+            include_str!("../../data/prompts/speck-code2tech.md"),
+        ),
+        (
+            "speck-tech2feat.md",
+            include_str!("../../data/prompts/speck-tech2feat.md"),
+        ),
+        (
+            "speck-review.md",
+            include_str!("../../data/prompts/speck-review.md"),
+        ),
     ];
     for (name, content) in prompts {
         std::fs::write(project_dir.join(".zerostack/prompts").join(name), content)?;
@@ -167,7 +182,8 @@ mod tests {
 
     #[test]
     fn test_detect_source_dir_detects_src() {
-        let dir = std::env::temp_dir().join(format!("speck_migrate_test_src_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("speck_migrate_test_src_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("src")).unwrap();
         assert_eq!(detect_source_dir(&dir), "src");
         std::fs::remove_dir_all(&dir).ok();
@@ -175,7 +191,8 @@ mod tests {
 
     #[test]
     fn test_detect_source_dir_detects_lib() {
-        let dir = std::env::temp_dir().join(format!("speck_migrate_test_lib_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("speck_migrate_test_lib_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("lib")).unwrap();
         assert_eq!(detect_source_dir(&dir), "lib");
         std::fs::remove_dir_all(&dir).ok();
@@ -183,7 +200,8 @@ mod tests {
 
     #[test]
     fn test_detect_source_dir_fallback() {
-        let dir = std::env::temp_dir().join(format!("speck_migrate_test_none_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("speck_migrate_test_none_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(detect_source_dir(&dir), "src");
         std::fs::remove_dir_all(&dir).ok();

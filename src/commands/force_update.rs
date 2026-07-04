@@ -104,7 +104,8 @@ mod tests {
     #[test]
     fn test_force_update_fails_without_speck_toml() {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!("speck_fu_no_config_{}_{}", std::process::id(), id));
+        let dir =
+            std::env::temp_dir().join(format!("speck_fu_no_config_{}_{}", std::process::id(), id));
         std::fs::create_dir_all(&dir).unwrap();
         let result = run_in_dir(&dir);
         std::fs::remove_dir_all(&dir).ok();

@@ -42,8 +42,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    print_section("Features (High-level Specifications)", &edited_features, &unregistered_features);
-    print_section("Technicals (Low-level Specifications)", &edited_technical, &unregistered_technical);
+    print_section(
+        "Features (High-level Specifications)",
+        &edited_features,
+        &unregistered_features,
+    );
+    print_section(
+        "Technicals (Low-level Specifications)",
+        &edited_technical,
+        &unregistered_technical,
+    );
     print_section("Code (Source Code)", &edited_src, &unregistered_src);
 
     Ok(())
@@ -71,8 +79,7 @@ mod tests {
 
     #[test]
     fn test_scan_directory_e2e_empty_dir() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_status_empty_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_status_empty_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let stored: BTreeMap<String, String> = BTreeMap::new();
         let gitignore = Gitignore::empty();
@@ -86,8 +93,7 @@ mod tests {
 
     #[test]
     fn test_scan_directory_e2e_detects_edited() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_status_edit_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_status_edit_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("test.md");
         std::fs::write(&file, "initial content").unwrap();
@@ -106,8 +112,7 @@ mod tests {
 
     #[test]
     fn test_scan_directory_e2e_detects_unregistered() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_status_unreg_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_status_unreg_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("new.md");
         std::fs::write(&file, "new file").unwrap();
@@ -124,8 +129,8 @@ mod tests {
 
     #[test]
     fn test_scan_directory_e2e_unchanged() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_status_unchanged_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("speck_status_unchanged_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("stable.md");
         std::fs::write(&file, "unchanged").unwrap();

@@ -1,12 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SpeckConfig {
     pub name: String,
     pub source_dir: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub code_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub features_dir: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,6 +25,8 @@ impl Default for SpeckConfig {
             name: String::new(),
             source_dir: "src".to_string(),
             model: None,
+            plan_model: None,
+            code_model: None,
             features_dir: None,
             fmt_cmd: None,
             test_cmd: None,
@@ -75,6 +81,8 @@ mod tests {
     fn test_features_path_custom() {
         let config = SpeckConfig {
             features_dir: Some("docs/features".to_string()),
+            plan_model: None,
+            code_model: None,
             ..Default::default()
         };
         assert_eq!(config.features_path(), "docs/features");
@@ -87,8 +95,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_to_file_from_file() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_config_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_config_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let config_path = dir.join("Speck.toml");
 
@@ -96,6 +103,8 @@ mod tests {
             name: "test-project".to_string(),
             source_dir: "lib".to_string(),
             model: Some("gpt-4".to_string()),
+            plan_model: None,
+            code_model: None,
             features_dir: Some("specs/features".to_string()),
             fmt_cmd: Some("cargo fmt".to_string()),
             test_cmd: Some("cargo test".to_string()),
@@ -120,8 +129,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_omits_none_fields() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_config_test2_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_config_test2_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let config_path = dir.join("Speck.toml");
 
@@ -129,6 +137,8 @@ mod tests {
             name: "minimal".to_string(),
             source_dir: "src".to_string(),
             model: None,
+            plan_model: None,
+            code_model: None,
             features_dir: None,
             fmt_cmd: None,
             test_cmd: None,

@@ -3,7 +3,11 @@ use crate::hashes::SpeckHashes;
 use crate::helpers;
 use dialoguer::{Confirm, Input};
 
-pub fn run(name: Option<String>, source_path: Option<String>, skip_git: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    name: Option<String>,
+    source_path: Option<String>,
+    skip_git: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let use_pickers = name.is_none() || source_path.is_none();
 
     let project_name = if let Some(n) = name {
@@ -79,11 +83,26 @@ pub fn run(name: Option<String>, source_path: Option<String>, skip_git: bool) ->
 
     // Copy prompts
     let prompts: &[(&str, &str)] = &[
-        ("speck-feat2tech.md", include_str!("../../data/prompts/speck-feat2tech.md")),
-        ("speck-tech2code.md", include_str!("../../data/prompts/speck-tech2code.md")),
-        ("speck-code2tech.md", include_str!("../../data/prompts/speck-code2tech.md")),
-        ("speck-tech2feat.md", include_str!("../../data/prompts/speck-tech2feat.md")),
-        ("speck-review.md", include_str!("../../data/prompts/speck-review.md")),
+        (
+            "speck-feat2tech.md",
+            include_str!("../../data/prompts/speck-feat2tech.md"),
+        ),
+        (
+            "speck-tech2code.md",
+            include_str!("../../data/prompts/speck-tech2code.md"),
+        ),
+        (
+            "speck-code2tech.md",
+            include_str!("../../data/prompts/speck-code2tech.md"),
+        ),
+        (
+            "speck-tech2feat.md",
+            include_str!("../../data/prompts/speck-tech2feat.md"),
+        ),
+        (
+            "speck-review.md",
+            include_str!("../../data/prompts/speck-review.md"),
+        ),
     ];
     for (name, content) in prompts {
         let dest = project_dir.join(".zerostack/prompts").join(name);
@@ -126,9 +145,18 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
-    fn run_init_in_dir(dir: &std::path::Path, name: &str, source_path: &str, skip_git: bool) -> Result<(), Box<dyn std::error::Error>> {
+    fn run_init_in_dir(
+        dir: &std::path::Path,
+        name: &str,
+        source_path: &str,
+        skip_git: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         crate::test_utils::with_cwd_locked(dir, || {
-            super::run(Some(name.to_string()), Some(source_path.to_string()), skip_git)
+            super::run(
+                Some(name.to_string()),
+                Some(source_path.to_string()),
+                skip_git,
+            )
         })
     }
 

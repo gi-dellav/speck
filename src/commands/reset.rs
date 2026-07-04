@@ -3,7 +3,13 @@ use crate::hashes::SpeckHashes;
 use crate::helpers;
 use std::path::Path;
 
-pub fn run(hard: bool, rebuild: bool, full: bool, always_yes: bool, always_no: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    hard: bool,
+    rebuild: bool,
+    full: bool,
+    always_yes: bool,
+    always_no: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let project_dir = std::env::current_dir()?;
     let config_path = project_dir.join("Speck.toml");
     let hash_path = project_dir.join(".speck_hash.toml");
@@ -20,7 +26,10 @@ pub fn run(hard: bool, rebuild: bool, full: bool, always_yes: bool, always_no: b
             let proceed = helpers::confirm(
                 always_yes,
                 always_no,
-                &format!("This will delete all source code in {}/. Proceed?", config.source_dir),
+                &format!(
+                    "This will delete all source code in {}/. Proceed?",
+                    config.source_dir
+                ),
                 false,
             )?;
             if !proceed {
@@ -56,7 +65,9 @@ pub fn run(hard: bool, rebuild: bool, full: bool, always_yes: bool, always_no: b
 
     if rebuild {
         println!("Running speck apply to rebuild...");
-        crate::commands::apply::run(None, false, false, false, false, false, None, always_yes, always_no)?;
+        crate::commands::apply::run(
+            None, false, false, false, false, false, None, None, None, always_yes, always_no,
+        )?;
     }
 
     Ok(())
@@ -71,7 +82,8 @@ mod tests {
 
     fn setup_temp_project() -> (std::path::PathBuf, std::path::PathBuf) {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!("speck_reset_test_{}_{}", std::process::id(), id));
+        let dir =
+            std::env::temp_dir().join(format!("speck_reset_test_{}_{}", std::process::id(), id));
         std::fs::create_dir_all(&dir).unwrap();
         let src = dir.join("src");
         std::fs::create_dir_all(&src).unwrap();
@@ -87,7 +99,14 @@ mod tests {
         (dir, config_path)
     }
 
-    fn run_in_dir(dir: &std::path::Path, hard: bool, rebuild: bool, full: bool, always_yes: bool, always_no: bool) -> Result<(), Box<dyn std::error::Error>> {
+    fn run_in_dir(
+        dir: &std::path::Path,
+        hard: bool,
+        rebuild: bool,
+        full: bool,
+        always_yes: bool,
+        always_no: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         crate::test_utils::with_cwd_locked(dir, || run(hard, rebuild, full, always_yes, always_no))
     }
 
@@ -124,7 +143,11 @@ mod tests {
     #[test]
     fn test_reset_fails_without_speck_toml() {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!("speck_reset_no_config_{}_{}", std::process::id(), id));
+        let dir = std::env::temp_dir().join(format!(
+            "speck_reset_no_config_{}_{}",
+            std::process::id(),
+            id
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         let result = run_in_dir(&dir, false, false, false, false, false);
         std::fs::remove_dir_all(&dir).ok();

@@ -1,13 +1,27 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "speck", version, about = "A fully spec-based AI agentic compiler")]
+#[command(
+    name = "speck",
+    version,
+    about = "A fully spec-based AI agentic compiler"
+)]
 pub struct Cli {
     /// Answer yes to all confirmation prompts
-    #[arg(long = "always-yes", short = 'y', global = true, conflicts_with = "always_no")]
+    #[arg(
+        long = "always-yes",
+        short = 'y',
+        global = true,
+        conflicts_with = "always_no"
+    )]
     pub always_yes: bool,
     /// Answer no to all confirmation prompts
-    #[arg(long = "always-no", short = 'n', global = true, conflicts_with = "always_yes")]
+    #[arg(
+        long = "always-no",
+        short = 'n',
+        global = true,
+        conflicts_with = "always_yes"
+    )]
     pub always_no: bool,
     #[command(subcommand)]
     pub command: Command,
@@ -62,11 +76,21 @@ pub enum Command {
         /// Set the temperature used in Step 4 (code generation)
         #[arg(long)]
         gen_temperature: Option<f64>,
+        /// Model for spec-generation stages (steps 1–3)
+        #[arg(long)]
+        plan_model: Option<String>,
+        /// Model for code-generation stage (step 4)
+        #[arg(long)]
+        code_model: Option<String>,
     },
     /// Run the formatting command defined in Speck.toml
     Fmt,
     /// Launch zerostack TUI and then update the project's files
-    Chat,
+    Chat {
+        /// Model to use for the interactive session
+        #[arg(long)]
+        model: Option<String>,
+    },
     /// Re-set all stored hashes to current project files' hashes
     ForceUpdate,
     /// Remove all stored hashes

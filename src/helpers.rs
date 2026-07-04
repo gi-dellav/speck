@@ -192,8 +192,7 @@ mod tests {
 
     #[test]
     fn test_project_relative_absolute_and_relative() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_relctx_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_relctx_test_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("src")).unwrap();
         std::fs::write(dir.join("src/foo.rs"), "fn foo() {}").unwrap();
         // current_dir() may canonicalize symlinks (e.g. /tmp -> /private/tmp);
@@ -211,8 +210,7 @@ mod tests {
 
     #[test]
     fn test_project_relative_works_after_deletion() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_reldel_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_reldel_test_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("src")).unwrap();
         let project = std::fs::canonicalize(&dir).unwrap();
         let file = dir.join("src/gone.rs");
@@ -225,8 +223,7 @@ mod tests {
 
     #[test]
     fn test_project_relative_outside_project_errors() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_relout_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_relout_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let project = std::fs::canonicalize(&dir).unwrap();
         let result = project_relative(Path::new("/etc/hosts"), &project);
@@ -266,8 +263,7 @@ mod tests {
 
     #[test]
     fn test_is_ignored_file_gitignore_pattern() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_gi_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_gi_test_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("target/debug")).unwrap();
         std::fs::create_dir_all(dir.join("src")).unwrap();
         std::fs::write(dir.join(".gitignore"), "target\n*.log\n").unwrap();
@@ -291,8 +287,7 @@ mod tests {
 
     #[test]
     fn test_scan_directory_detects_edited_and_unregistered() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_scan_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_scan_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file_edited = dir.join("edited.txt");
         let file_new = dir.join("new.txt");
@@ -303,7 +298,9 @@ mod tests {
         stored.insert("edited.txt".to_string(), "old_hash".to_string());
         let gitignore = Gitignore::empty();
 
-        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        let (edited, unreg) = with_cwd_locked(&dir, || {
+            scan_directory(Path::new("."), &stored, &gitignore).unwrap()
+        });
         assert!(edited.contains(&"edited.txt".to_string()));
         assert!(unreg.contains(&"new.txt".to_string()));
         std::fs::remove_dir_all(&dir).ok();
@@ -311,8 +308,7 @@ mod tests {
 
     #[test]
     fn test_scan_directory_unchanged() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_scan_uc_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_scan_uc_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("stable.txt");
         std::fs::write(&file, "unchanged").unwrap();
@@ -322,7 +318,9 @@ mod tests {
         stored.insert("stable.txt".to_string(), hash);
         let gitignore = Gitignore::empty();
 
-        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        let (edited, unreg) = with_cwd_locked(&dir, || {
+            scan_directory(Path::new("."), &stored, &gitignore).unwrap()
+        });
         assert!(edited.is_empty());
         assert!(unreg.is_empty());
         std::fs::remove_dir_all(&dir).ok();
@@ -330,15 +328,16 @@ mod tests {
 
     #[test]
     fn test_scan_directory_skips_ignored() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_scan_ign_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_scan_ign_{}", std::process::id()));
         std::fs::create_dir_all(dir.join("specs")).unwrap();
         let file = dir.join("specs/_draft.md");
         std::fs::write(&file, "# draft").unwrap();
         let stored = BTreeMap::new();
         let gitignore = Gitignore::empty();
 
-        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        let (edited, unreg) = with_cwd_locked(&dir, || {
+            scan_directory(Path::new("."), &stored, &gitignore).unwrap()
+        });
         assert!(edited.is_empty());
         assert!(unreg.is_empty());
         std::fs::remove_dir_all(&dir).ok();
@@ -346,13 +345,14 @@ mod tests {
 
     #[test]
     fn test_scan_directory_empty_dir() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_scan_empty_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_scan_empty_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let stored = BTreeMap::new();
         let gitignore = Gitignore::empty();
 
-        let (edited, unreg) = with_cwd_locked(&dir, || scan_directory(Path::new("."), &stored, &gitignore).unwrap());
+        let (edited, unreg) = with_cwd_locked(&dir, || {
+            scan_directory(Path::new("."), &stored, &gitignore).unwrap()
+        });
         assert!(edited.is_empty());
         assert!(unreg.is_empty());
         std::fs::remove_dir_all(&dir).ok();
@@ -362,20 +362,15 @@ mod tests {
     fn test_scan_directory_missing_dir() {
         let stored = BTreeMap::new();
         let gitignore = Gitignore::empty();
-        let (edited, unreg) = scan_directory(
-            Path::new("/nonexistent_dir"),
-            &stored,
-            &gitignore,
-        )
-        .unwrap();
+        let (edited, unreg) =
+            scan_directory(Path::new("/nonexistent_dir"), &stored, &gitignore).unwrap();
         assert!(edited.is_empty());
         assert!(unreg.is_empty());
     }
 
     #[test]
     fn test_ensure_not_gitignored_removes_entries() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_helper_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_helper_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let gitignore = dir.join(".gitignore");
         std::fs::write(&gitignore, "node_modules\nSpeck.toml\n.speck_hash.toml\n").unwrap();
@@ -389,8 +384,7 @@ mod tests {
 
     #[test]
     fn test_ensure_not_gitignored_noop_when_missing() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_helper_test2_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_helper_test2_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let result = ensure_not_gitignored(&dir);
         assert!(result.is_ok());

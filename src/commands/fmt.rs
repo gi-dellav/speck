@@ -66,8 +66,7 @@ mod tests {
 
     #[test]
     fn test_fmt_fails_without_speck_toml() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_fmt_test_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_fmt_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let result = run_fmt_in_dir(&dir);
         std::fs::remove_dir_all(&dir).ok();
@@ -77,10 +76,13 @@ mod tests {
 
     #[test]
     fn test_fmt_fails_without_hash_file() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_fmt_test2_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_fmt_test2_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        std::fs::write(
+            dir.join("Speck.toml"),
+            "name = \"test\"\nsource_dir = \"src\"\n",
+        )
+        .unwrap();
         let result = run_fmt_in_dir(&dir);
         std::fs::remove_dir_all(&dir).ok();
         assert!(result.is_err());
@@ -89,10 +91,13 @@ mod tests {
 
     #[test]
     fn test_fmt_fails_without_fmt_cmd() {
-        let dir = std::env::temp_dir()
-            .join(format!("speck_fmt_test3_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("speck_fmt_test3_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        std::fs::write(
+            dir.join("Speck.toml"),
+            "name = \"test\"\nsource_dir = \"src\"\n",
+        )
+        .unwrap();
         let hashes = crate::hashes::SpeckHashes::default();
         hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
         let result = run_fmt_in_dir(&dir);

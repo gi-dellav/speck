@@ -1,7 +1,11 @@
 use dialoguer::MultiSelect;
 
 const HOOKS: &[(&str, &str, &str)] = &[
-    ("check-before-commit", "pre-commit", "speck status && speck apply"),
+    (
+        "check-before-commit",
+        "pre-commit",
+        "speck status && speck apply",
+    ),
     ("format-before-commit", "pre-commit", "speck fmt"),
     ("apply-before-push", "pre-push", "speck apply"),
     ("apply-after-merge", "post-merge", "speck apply"),
@@ -38,10 +42,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             String::new()
         };
 
-        let entry = format!(
-            "# speck {}\n{}\n",
-            name, command
-        );
+        let entry = format!("# speck {}\n{}\n", name, command);
 
         if existing.contains(&format!("# speck {}", name)) {
             println!("Hook '{}' already installed for {}.", name, hook_type);
@@ -57,9 +58,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         if !existing.contains("#!/bin/sh") && !existing.contains("#!/usr/bin/env") {
-            new_content = format!("#!/bin/sh\n\n{}", new_content.trim_start_matches("#!/bin/sh\n"));
+            new_content = format!(
+                "#!/bin/sh\n\n{}",
+                new_content.trim_start_matches("#!/bin/sh\n")
+            );
             if !existing.is_empty() && !existing.starts_with("#!") {
-                new_content = format!("#!/bin/sh\n{}", new_content.trim_start_matches("#!/bin/sh\n"));
+                new_content = format!(
+                    "#!/bin/sh\n{}",
+                    new_content.trim_start_matches("#!/bin/sh\n")
+                );
             }
         }
 
@@ -100,11 +107,17 @@ mod tests {
         use std::sync::atomic::{AtomicU32, Ordering};
         static COUNTER: AtomicU32 = AtomicU32::new(0);
         let id = COUNTER.fetch_add(1, Ordering::SeqCst);
-        let dir = std::env::temp_dir().join(format!("speck_hooks_test_{}_{}", std::process::id(), id));
+        let dir =
+            std::env::temp_dir().join(format!("speck_hooks_test_{}_{}", std::process::id(), id));
         std::fs::create_dir_all(&dir).unwrap();
         let result = crate::test_utils::with_cwd_locked(&dir, run);
         std::fs::remove_dir_all(&dir).ok();
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Not a git repository"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Not a git repository")
+        );
     }
 }

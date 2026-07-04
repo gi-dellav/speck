@@ -36,7 +36,9 @@ pub fn run(source: String, dest: String) -> Result<(), Box<dyn std::error::Error
 
     let new_hash = hashes::compute_hash(&dst_path.to_path_buf())?;
     let rel_dst_str = rel_dst;
-    if rel_dst_str.starts_with("specs/features") || rel_dst_str.starts_with(&config_features_dir(&project_dir)?) {
+    if rel_dst_str.starts_with("specs/features")
+        || rel_dst_str.starts_with(&config_features_dir(&project_dir)?)
+    {
         hashes.features_hash.insert(rel_dst_str, new_hash);
     } else if rel_dst_str.starts_with("specs/technical") {
         hashes.technical_hash.insert(rel_dst_str, new_hash);
@@ -80,7 +82,11 @@ mod tests {
     fn test_mv_destination_exists_error() {
         let dir = setup_temp_dir();
         fs::write(&dir.join(".speck_hash.toml"), "").unwrap();
-        fs::write(&dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        fs::write(
+            &dir.join("Speck.toml"),
+            "name = \"test\"\nsource_dir = \"src\"\n",
+        )
+        .unwrap();
         fs::write(&dir.join("a.txt"), "a").unwrap();
         fs::write(&dir.join("b.txt"), "b").unwrap();
         let result = run_mv_in_dir(
@@ -89,11 +95,20 @@ mod tests {
             dir.join("b.txt").to_str().unwrap(),
         );
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Destination already exists"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Destination already exists")
+        );
         cleanup_temp_dir(&dir);
     }
 
-    fn run_mv_in_dir(dir: &std::path::Path, src: &str, dst: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn run_mv_in_dir(
+        dir: &std::path::Path,
+        src: &str,
+        dst: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let s = src.to_string();
         let d = dst.to_string();
         crate::test_utils::with_cwd_locked(dir, || super::run(s, d))
@@ -104,12 +119,18 @@ mod tests {
         let dir = setup_temp_dir();
         let src_dir = dir.join("src");
         fs::create_dir_all(&src_dir).unwrap();
-        fs::write(&dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        fs::write(
+            &dir.join("Speck.toml"),
+            "name = \"test\"\nsource_dir = \"src\"\n",
+        )
+        .unwrap();
         let mut hashes = crate::hashes::SpeckHashes::default();
         let file_a = src_dir.join("old_name.rs");
         fs::write(&file_a, "fn main() {}").unwrap();
         let hash_a = crate::hashes::compute_hash(&file_a).unwrap();
-        hashes.src_hash.insert("src/old_name.rs".to_string(), hash_a);
+        hashes
+            .src_hash
+            .insert("src/old_name.rs".to_string(), hash_a);
         hashes.to_file(&dir.join(".speck_hash.toml")).unwrap();
 
         let src_abs = dir.join("src/old_name.rs");
@@ -131,7 +152,11 @@ mod tests {
     fn test_mv_nonexistent_source_errors() {
         let dir = setup_temp_dir();
         fs::write(&dir.join(".speck_hash.toml"), "").unwrap();
-        fs::write(&dir.join("Speck.toml"), "name = \"test\"\nsource_dir = \"src\"\n").unwrap();
+        fs::write(
+            &dir.join("Speck.toml"),
+            "name = \"test\"\nsource_dir = \"src\"\n",
+        )
+        .unwrap();
         let result = run_mv_in_dir(&dir, "nonexistent.txt", "dest.txt");
         assert!(result.is_err());
         cleanup_temp_dir(&dir);

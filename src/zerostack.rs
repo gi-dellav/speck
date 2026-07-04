@@ -24,7 +24,11 @@ pub fn run(args: &[&str], model: Option<&str>) -> Result<String, Box<dyn std::er
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-pub fn run_p(args: &[&str], msg: &str, model: Option<&str>) -> Result<String, Box<dyn std::error::Error>> {
+pub fn run_p(
+    args: &[&str],
+    msg: &str,
+    model: Option<&str>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let mut all_args: Vec<&str> = args.to_vec();
     all_args.push("-p");
     all_args.push(msg);
@@ -38,7 +42,11 @@ pub fn run_p(args: &[&str], msg: &str, model: Option<&str>) -> Result<String, Bo
 /// (e.g. `migrate`, `apply`): capturing stdout would hide all live progress and
 /// make a long-running agent look frozen. stdin is null so interactive prompts
 /// (like the one-time ARCHITECTURE.md question) read EOF and proceed.
-pub fn run_p_streamed(args: &[&str], msg: &str, model: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_p_streamed(
+    args: &[&str],
+    msg: &str,
+    model: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = Command::new("zerostack");
     if let Some(m) = model {
         cmd.arg("--quick-model").arg(m);
@@ -55,9 +63,12 @@ pub fn run_p_streamed(args: &[&str], msg: &str, model: Option<&str>) -> Result<(
     Ok(())
 }
 
-pub fn run_tui() -> Result<(), Box<dyn std::error::Error>> {
-    let status = Command::new("zerostack")
-        .status()?;
+pub fn run_tui(model: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::new("zerostack");
+    if let Some(m) = model {
+        cmd.arg("--quick-model").arg(m);
+    }
+    let status = cmd.status()?;
     if !status.success() {
         return Err("zerostack TUI failed".into());
     }
