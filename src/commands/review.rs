@@ -14,34 +14,21 @@ pub fn run(output: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     let prompt_name = zerostack::prompt_name("speck-review.md");
     let msg = "Perform the complete code review described in your instructions and \
                output the full Markdown report.";
-    eprintln!("Reviewing project... (this runs the agent and may take a while)");
+    let result = zerostack::run_p(
+        &[
+            "--load-prompt",
+            &prompt_name,
+            "--no-session",
+            "--temperature",
+            "0",
+        ],
+        msg,
+        model,
+    )?;
     if let Some(output_path) = output {
-        let result = zerostack::run_p(
-            &[
-                "--load-prompt",
-                &prompt_name,
-                "--no-session",
-                "--temperature",
-                "0",
-            ],
-            msg,
-            model,
-        )?;
         std::fs::write(&output_path, &result)?;
         println!("Review saved to {}", output_path);
     } else {
-        let result = zerostack::run_p(
-            &[
-                "--load-prompt",
-                &prompt_name,
-                "--pure-stdout",
-                "--no-session",
-                "--temperature",
-                "0",
-            ],
-            msg,
-            model,
-        )?;
         println!("{}", result);
     }
     Ok(())

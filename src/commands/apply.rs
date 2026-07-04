@@ -111,104 +111,127 @@ pub fn run(
     let run_direct = !only_inverse;
 
     // Step 1: code → specs/technical
-    if run_inverse && !resolved_src.is_empty() {
+    if run_inverse {
+        eprintln!("=======");
         eprintln!("Step 1/4: Updating specs/technical from source code...");
-        let msg = build_message(
-            "Update the technical specifications to match the edited source code files.",
-            &format!(
-                "These source files were edited:\n{}\n\nUpdate the corresponding files in specs/technical/.",
-                resolved_src.join("\n")
-            ),
-            &custom,
-        );
-        zerostack::run_p_streamed(
-            &[
-                "--load-prompt",
-                &zerostack::prompt_name("speck-code2tech.md"),
-                "--temperature",
-                "0",
-                "--no-session",
-            ],
-            &msg,
-            plan_model,
-        )
-        .map_err(|e| format!("Step 1/4 (code → specs/technical) failed: {}", e))?;
+        if !resolved_src.is_empty() {
+            let msg = build_message(
+                "Update the technical specifications to match the edited source code files.",
+                &format!(
+                    "These source files were edited:\n{}\n\nUpdate the corresponding files in specs/technical/.",
+                    resolved_src.join("\n")
+                ),
+                &custom,
+            );
+            zerostack::run_p_streamed(
+                &[
+                    "--load-prompt",
+                    &zerostack::prompt_name("speck-code2tech.md"),
+                    "--pure-stdout",
+                    "--temperature",
+                    "0",
+                    "--no-session",
+                ],
+                &msg,
+                plan_model,
+            )
+            .map_err(|e| format!("Step 1/4 (code → specs/technical) failed: {}", e))?;
+        } else {
+            eprintln!("nothing to do for this step");
+        }
     }
 
     // Step 2: specs/technical → specs/features (only with --update-features)
-    if run_inverse && update_features && (!resolved_src.is_empty() || !resolved_tech.is_empty()) {
+    if run_inverse && update_features {
+        eprintln!("=======");
         eprintln!("Step 2/4: Updating specs/features from specs/technical...");
-        let msg = build_message(
-            "Update the high-level feature specifications to reflect changes in the technical specifications.",
-            &format!(
-                "These technical spec files were updated:\n{}\n\nUpdate specs/features/ accordingly.",
-                resolved_tech.join("\n")
-            ),
-            &custom,
-        );
-        zerostack::run_p_streamed(
-            &[
-                "--load-prompt",
-                &zerostack::prompt_name("speck-tech2feat.md"),
-                "--temperature",
-                "0",
-                "--no-session",
-            ],
-            &msg,
-            plan_model,
-        )
-        .map_err(|e| format!("Step 2/4 (specs/technical → specs/features) failed: {}", e))?;
+        if !resolved_src.is_empty() || !resolved_tech.is_empty() {
+            let msg = build_message(
+                "Update the high-level feature specifications to reflect changes in the technical specifications.",
+                &format!(
+                    "These technical spec files were updated:\n{}\n\nUpdate specs/features/ accordingly.",
+                    resolved_tech.join("\n")
+                ),
+                &custom,
+            );
+            zerostack::run_p_streamed(
+                &[
+                    "--load-prompt",
+                    &zerostack::prompt_name("speck-tech2feat.md"),
+                    "--pure-stdout",
+                    "--temperature",
+                    "0",
+                    "--no-session",
+                ],
+                &msg,
+                plan_model,
+            )
+            .map_err(|e| format!("Step 2/4 (specs/technical → specs/features) failed: {}", e))?;
+        } else {
+            eprintln!("nothing to do for this step");
+        }
     }
 
     // Step 3: specs/features → specs/technical
-    if run_direct && !all_edited_feat.is_empty() {
+    if run_direct {
+        eprintln!("=======");
         eprintln!("Step 3/4: Updating specs/technical from specs/features...");
-        let msg = build_message(
-            "Update the technical specifications to implement the edited feature specifications.",
-            &format!(
-                "These feature spec files were edited:\n{}\n\nUpdate specs/technical/ accordingly.",
-                all_edited_feat.join("\n")
-            ),
-            &custom,
-        );
-        zerostack::run_p_streamed(
-            &[
-                "--load-prompt",
-                &zerostack::prompt_name("speck-feat2tech.md"),
-                "--no-session",
-            ],
-            &msg,
-            plan_model,
-        )
-        .map_err(|e| format!("Step 3/4 (specs/features → specs/technical) failed: {}", e))?;
+        if !all_edited_feat.is_empty() {
+            let msg = build_message(
+                "Update the technical specifications to implement the edited feature specifications.",
+                &format!(
+                    "These feature spec files were edited:\n{}\n\nUpdate specs/technical/ accordingly.",
+                    all_edited_feat.join("\n")
+                ),
+                &custom,
+            );
+            zerostack::run_p_streamed(
+                &[
+                    "--load-prompt",
+                    &zerostack::prompt_name("speck-feat2tech.md"),
+                    "--pure-stdout",
+                    "--no-session",
+                ],
+                &msg,
+                plan_model,
+            )
+            .map_err(|e| format!("Step 3/4 (specs/features → specs/technical) failed: {}", e))?;
+        } else {
+            eprintln!("nothing to do for this step");
+        }
     }
 
     // Step 4: specs/technical + specs/features → source code
     let tech_or_feat_edited = !resolved_tech.is_empty() || !all_edited_feat.is_empty();
-    if run_direct && tech_or_feat_edited {
+    if run_direct {
+        eprintln!("=======");
         eprintln!("Step 4/4: Updating source code from specifications...");
-        let mut relevant: Vec<String> = Vec::new();
-        relevant.extend(resolved_tech.clone());
-        relevant.extend(all_edited_feat.clone());
-        let msg = build_message(
-            "Update the source code to match the edited specification files.",
-            &format!(
-                "These spec files were edited:\n{}\n\nUpdate the source code in {}/ accordingly.",
-                relevant.join("\n"),
-                config.source_dir
-            ),
-            &custom,
-        );
-        let prompt_name = zerostack::prompt_name("speck-tech2code.md");
-        let mut args: Vec<&str> = vec!["--load-prompt", &prompt_name, "--no-session"];
-        let temp_str;
-        if let Some(t) = gen_temperature {
-            temp_str = t.to_string();
-            args.push("--temperature");
-            args.push(&temp_str);
+        if tech_or_feat_edited {
+            let mut relevant: Vec<String> = Vec::new();
+            relevant.extend(resolved_tech.clone());
+            relevant.extend(all_edited_feat.clone());
+            let msg = build_message(
+                "Update the source code to match the edited specification files.",
+                &format!(
+                    "These spec files were edited:\n{}\n\nUpdate the source code in {}/ accordingly.",
+                    relevant.join("\n"),
+                    config.source_dir
+                ),
+                &custom,
+            );
+            let prompt_name = zerostack::prompt_name("speck-tech2code.md");
+            let mut args: Vec<&str> = vec!["--load-prompt", &prompt_name, "--pure-stdout", "--no-session"];
+            let temp_str;
+            if let Some(t) = gen_temperature {
+                temp_str = t.to_string();
+                args.push("--temperature");
+                args.push(&temp_str);
+            }
+            zerostack::run_p_streamed(&args, &msg, code_model)
+                .map_err(|e| format!("Step 4/4 (specifications → source code) failed: {}", e))?;
+        } else {
+            eprintln!("nothing to do for this step");
         }
-        zerostack::run_p_streamed(&args, &msg, code_model)
-            .map_err(|e| format!("Step 4/4 (specifications → source code) failed: {}", e))?;
     }
 
     // Final hash save
