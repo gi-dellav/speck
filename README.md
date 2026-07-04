@@ -1,11 +1,11 @@
-![banner](https://raw.githubusercontent.com/gi-dellav/speck/main/assets/banner.png)
+<img width="3384" height="1208" alt="banner" src="https://github.com/user-attachments/assets/fb2f66d2-da54-44f4-a023-1b75a2f124ea" />
 
 ---
 
 # speck
-Spec-driven agentic compiler — keep features, technical specs, and code in sync using AI agents.
+Spec-driven agentic compiler: simple commands for complete agent managament, allowing for reproducible and verifiable code generation, moving the traditional chat interface out of the spotlight.
 
-*note:* speck is a frontend for [zerostack](https://github.com/gi-dellav/zerostack). It requires a working `zerostack` binary on `PATH`.
+*note:* speck is a based on [zerostack](https://github.com/gi-dellav/zerostack) and it requires a working `zerostack` binary on `PATH`.
 
 ## Features
 
@@ -22,10 +22,14 @@ Spec-driven agentic compiler — keep features, technical specs, and code in syn
 
 ## Installation
 
+### Github Releases
+
+You can download compiled binaries from [Github releases](https://github.com/gi-dellav/speck/releases).
+
 ### Cargo
 
 ```bash
-cargo install speck-dev --version 1.0.0-rc3
+cargo install speck-dev
 ```
 
 ### From source
